@@ -127,6 +127,8 @@ def evaluate(mode: str, text: str, scene: Scene, task: Task, planner: str = 'aut
     goal = goal_facts(problem)
     r['goal_exact'] = goal == gt['goal']
     r['goal_f1'] = prf(goal, gt['goal'])['f1']
+    r['goal_missing'] = sorted(' '.join(f) for f in gt['goal'] - goal)
+    r['goal_extra'] = sorted(' '.join(f) for f in goal - gt['goal'])
 
     # ---- plan for the VLM's problem
     r['stage'] = 'solve'

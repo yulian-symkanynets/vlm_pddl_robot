@@ -1,6 +1,7 @@
 """VLM backends: Hugging Face models on a CUDA GPU, and a mock for testing without a GPU."""
 from __future__ import annotations
 
+import copy
 import json
 import random
 import re
@@ -61,9 +62,10 @@ class HFVLM:
         if max_visual_tokens not in self._processors:
             from transformers import AutoProcessor
             px = self.spec.get('patch', 32) ** 2
-            self._processors[max_visual_tokens] = AutoProcessor.from_pretrained(
-                self.hf, min_pixels=min(256, max_visual_tokens) * px,
-                max_pixels=max_visual_tokens * px, use_fast=False)
+            # pixel budget per image; 'size' replaces the deprecated min_pixels/max_pixels kwargs
+            size = {'shortest_edge': min(256, max_visual_tokens) * px,
+                    'longest_edge': max_visual_tokens * px}
+            self._processors[max_visual_tokens] = AutoProcessor.from_pretrained(self.hf, size=size)
         return self._processors[max_visual_tokens]
 
     def generate(self, image_paths: list[Path], prompt: str, max_visual_tokens: int = 1024,
@@ -91,8 +93,10 @@ class HFVLM:
         torch.cuda.synchronize()
         preprocess_s = time.perf_counter() - t0
 
-        gc = self.model.generation_config
+        gc = copy.deepcopy(self.model.generation_config)
         gc.num_beams = 1
+        gc.max_new_tokens = max_new_tokens
+        gc.use_cache = True
         if sample:
             gc.do_sample, gc.temperature, gc.top_p = True, 0.6, 0.95
         else:
@@ -101,8 +105,7 @@ class HFVLM:
         torch.cuda.synchronize()
         t1 = time.perf_counter()
         with torch.inference_mode():
-            out = self.model.generate(**inputs, generation_config=gc,
-                                      max_new_tokens=max_new_tokens, use_cache=True)
+            out = self.model.generate(**inputs, generation_config=gc)
         torch.cuda.synchronize()
         generate_s = time.perf_counter() - t1
         n_in = inputs['input_ids'].shape[1]
