@@ -8,7 +8,7 @@
   python client.py demo                      # all cases in examples/cases.yaml
   python client.py demo --only box shelf     # cases whose name contains one of the words
 
---url defaults to $SERVER_URL or http://localhost:8000
+--url defaults to $SERVER_URL or http://127.0.0.1:8010
 """
 from __future__ import annotations
 
@@ -105,7 +105,7 @@ def cmd_demo(url: str, only: list[str], verbose: bool):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('--url', default=os.environ.get('SERVER_URL', 'http://localhost:8000'))
+    ap.add_argument('--url', default=os.environ.get('SERVER_URL', 'http://127.0.0.1:8010'))
     sub = ap.add_subparsers(dest='cmd', required=True)
     sub.add_parser('health')
     p = sub.add_parser('plan')

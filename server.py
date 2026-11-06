@@ -3,9 +3,9 @@
 Start (foreground):   python server.py --model qwen3-vl-8b
 Start (background):   ./serve.sh start            (see ./serve.sh help)
 Without a GPU:        python server.py --model mock
-API docs in browser:  http://localhost:8000/docs
+API docs in browser:  http://127.0.0.1:8010/docs
 
-Web page:             http://localhost:8000/   (upload photos, type the task, see the plan)
+Web page:             http://127.0.0.1:8010/   (upload photos, type the task, see the plan)
 
 Endpoints
   GET  /                the test web page (web/index.html)
@@ -34,6 +34,7 @@ from datetime import datetime
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 import yaml
@@ -62,6 +63,8 @@ class SolveRequest(BaseModel):
 
 def create_app(vlm, max_visual_tokens: int = 1024, log_dir: Path = LOG_DIR) -> FastAPI:
     app = FastAPI(title='VLM + PDDL planning server', version='1.0')
+    # allow the web page also when it is opened as a file or from another host/port
+    app.add_middleware(CORSMiddleware, allow_origins=['*'], allow_methods=['*'], allow_headers=['*'])
     gpu_lock = threading.Lock()           # one GPU: one model call at a time
     state = {'started': time.time(), 'requests': 0}
 
@@ -211,7 +214,7 @@ def main():
                     help='key from models.yaml, or "mock" (no GPU)')
     ap.add_argument('--quant', default=os.environ.get('QUANT', '4bit'), choices=['4bit', '8bit', 'bf16'])
     ap.add_argument('--host', default=os.environ.get('HOST', '0.0.0.0'))
-    ap.add_argument('--port', type=int, default=int(os.environ.get('PORT', 8000)))
+    ap.add_argument('--port', type=int, default=int(os.environ.get('PORT', 8010)))
     ap.add_argument('--max-visual-tokens', type=int, default=int(os.environ.get('MAX_VISUAL_TOKENS', 1024)))
     args = ap.parse_args()
 

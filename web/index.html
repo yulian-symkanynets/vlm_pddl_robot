@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Robot Task Planner</title>
+<link rel="icon" href="data:,">
 <style>
   :root {
     --bg: #f6f7f9; --panel: #ffffff; --text: #1d2330; --muted: #657085; --border: #dde1e8;
@@ -25,7 +26,11 @@
   header { display: flex; align-items: center; justify-content: space-between; gap: 12px;
            padding: 14px 20px; border-bottom: 1px solid var(--border); background: var(--panel); }
   header h1 { font-size: 17px; margin: 0; font-weight: 600; }
+  #server-box { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+  #api { width: 200px; max-width: 100%; padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px;
+         background: var(--bg); color: var(--text); }
   #server { font-size: 13px; color: var(--muted); }
+  #server.down { color: var(--bad); }
   #server b { color: var(--text); font-weight: 600; }
   main { display: grid; grid-template-columns: minmax(0, 420px) minmax(0, 1fr); gap: 18px;
          padding: 18px 20px; max-width: 1300px; margin: 0 auto; }
@@ -92,7 +97,11 @@
 <body>
 <header>
   <h1>Robot Task Planner</h1>
-  <div id="server">connecting…</div>
+  <div id="server-box">
+    <label class="small" for="api">server</label>
+    <input id="api" class="mono" spellcheck="false">
+    <span id="server">connecting…</span>
+  </div>
 </header>
 
 <main>
@@ -134,10 +143,26 @@ let mode = 'photos';          // 'photos' | 'json'
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
 
-// ---------- server status
-fetch('/health').then((r) => r.json()).then((h) => {
-  $('server').innerHTML = `model <b>${esc(h.model)}</b>${h.quant && h.quant !== 'none' ? ' · ' + esc(h.quant) : ''}`;
-}).catch(() => { $('server').textContent = 'server not reachable'; });
+// ---------- which server? same one that served the page; if opened as a file, the field below
+const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+                set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
+let API = location.protocol.startsWith('http') ? location.origin : (store.get('api') || 'http://127.0.0.1:8010');
+$('api').value = API;
+
+function connect() {
+  API = $('api').value.trim().replace(/\/+$/, '');
+  store.set('api', API);
+  $('server').className = '';
+  $('server').textContent = 'connecting…';
+  fetch(API + '/health').then((r) => r.json()).then((h) => {
+    $('server').innerHTML = `model <b>${esc(h.model)}</b>${h.quant && h.quant !== 'none' ? ' · ' + esc(h.quant) : ''}`;
+    loadExamples();
+  }).catch(() => {
+    $('server').className = 'down';
+    $('server').textContent = 'not reachable: start ./serve.sh, check the port';
+  });
+}
+$('api').addEventListener('change', connect);
 
 // ---------- tabs
 function setMode(m) {
@@ -178,7 +203,8 @@ $('drop').ondragleave = () => $('drop').classList.remove('over');
 $('drop').ondrop = (e) => { e.preventDefault(); $('drop').classList.remove('over'); addFiles(e.dataTransfer.files); };
 
 // ---------- examples
-fetch('/examples').then((r) => r.json()).then((list) => {
+function loadExamples() {
+fetch(API + '/examples').then((r) => r.json()).then((list) => {
   $('examples').innerHTML = '';
   for (const ex of list) {
     const b = document.createElement('button');
@@ -194,7 +220,7 @@ fetch('/examples').then((r) => r.json()).then((list) => {
       } else {
         files = [];
         for (const url of ex.images) {
-          const blob = await (await fetch(url)).blob();
+          const blob = await (await fetch(API + url)).blob();
           files.push(new File([blob], url.split('/').pop(), {type: blob.type || 'image/jpeg'}));
         }
         renderThumbs();
@@ -204,6 +230,7 @@ fetch('/examples').then((r) => r.json()).then((list) => {
     $('examples').append(b);
   }
 }).catch(() => { $('examples').innerHTML = '<span class="small">no examples</span>'; });
+}
 
 // ---------- readable steps
 function stepText(action, args, label) {
@@ -305,7 +332,7 @@ $('run').onclick = async () => {
   tick();
   const timer = setInterval(tick, 500);
   try {
-    const r = await fetch('/plan/upload', {method: 'POST', body: fd});
+    const r = await fetch(API + '/plan/upload', {method: 'POST', body: fd});
     if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
     render(await r.json());
   } catch (e) {
@@ -316,6 +343,7 @@ $('run').onclick = async () => {
     btn.textContent = 'Make a plan';
   }
 };
+connect();
 $('instruction').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) $('run').click(); });
 </script>
 </body>

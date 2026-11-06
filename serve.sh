@@ -2,12 +2,12 @@
 # Run the planning server in the background.
 #   ./serve.sh start [model] [quant]   e.g. ./serve.sh start qwen3-vl-8b 4bit   (default: $MODEL or qwen3-vl-8b)
 #   ./serve.sh stop | restart | status | logs
-# Env: PORT (8000), HOST (0.0.0.0), MAX_VISUAL_TOKENS (1024)
+# Env: PORT (8010), HOST (0.0.0.0), MAX_VISUAL_TOKENS (1024)
 cd "$(dirname "$0")"
 mkdir -p logs
 PID=logs/server.pid
 LOG=logs/server.log
-PORT=${PORT:-8000}
+PORT=${PORT:-8010}
 [ -f .venv/bin/activate ] && source .venv/bin/activate
 
 running() { [ -f "$PID" ] && kill -0 "$(cat "$PID")" 2>/dev/null; }
