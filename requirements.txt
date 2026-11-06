@@ -1,0 +1,14 @@
+# Planning + validation (works everywhere, also on the Mac)
+pyyaml
+pillow
+pytest
+unified-planning>=1.3
+up-fast-downward
+up-pyperplan
+
+# VLM inference (GPU machine). Install torch first with the right CUDA build, see setup.sh.
+transformers>=4.57.1
+accelerate
+bitsandbytes
+huggingface_hub
+packaging

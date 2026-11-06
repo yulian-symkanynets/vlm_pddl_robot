@@ -1,0 +1,127 @@
+# Scenes, views and ground truth for the benchmark.
+#
+# env        : things the robot knows without looking (fixed lab setup). Sent to the VLM as given facts.
+# items      : object IDs + description. IDs are <color>_<shape>. Sent to the VLM as hints
+#              (like a detector would give them) unless --no-hints is used.
+# support    : GROUND TRUTH, what each item physically rests on: table | <item id> | <place id>
+# hidden     : items not localizable from the given views (gt: (localized x) is false)
+# views      : name -> image file. view_sets: which combinations of views to benchmark.
+# tasks      : instruction (natural language, sent to the VLM) + goal (ground truth, never sent).
+#              goal "sort" = every item into the zone of its color.
+#
+# Labels were made from the phone photos in cosmo/images. Check them before trusting results.
+
+env:
+  places:
+    red_zone:    {kind: paper, slots: 2, open: true}
+    yellow_zone: {kind: paper, slots: 2, open: true}
+    blue_zone:   {kind: paper, slots: 2, open: true}
+    green_zone:  {kind: paper, slots: 2, open: true}
+  # Example for later scenes (box / shelf):
+  #   box_1:     {kind: box,   slots: 3, open: false}          # closed lid -> open-lid needed
+  #   shelf_low: {kind: shelf, slots: 2, open: true, clearance_mm: 60}
+  # Items taller than clearance_mm get no (fits item place) fact.
+
+item_defs:
+  red_cylinder:  {color: red,    shape: cylinder, height_mm: 40, desc: "red wooden cylinder"}
+  yellow_block:  {color: yellow, shape: block,    height_mm: 60, desc: "yellow wooden rectangular block (prism)"}
+  green_block:   {color: green,  shape: block,    height_mm: 60, desc: "green wooden rectangular block (prism)"}
+  blue_cylinder: {color: blue,   shape: cylinder, height_mm: 40, desc: "blue wooden cylinder"}
+  label_cube:    {color: red,    shape: cube,     height_mm: 30, desc: "small cube with a red top and white printed label sides"}
+
+sort_instruction: "Sort the objects: put every object onto the paper of the same color. The small labelled cube counts as red (its top is red)."
+
+scenes:
+  - id: s1_flat
+    views: {wide: scene1.jpg}
+    view_sets: [[wide]]
+    items: [red_cylinder, yellow_block, green_block, blue_cylinder, label_cube]
+    support: {red_cylinder: table, yellow_block: table, green_block: table, blue_cylinder: table, label_cube: table}
+    tasks:
+      - {id: sort, goal: sort}
+
+  - id: s2_flat
+    note: "red cylinder partly hidden behind the yellow block (phone view)"
+    views: {wide: scene2.jpg}
+    view_sets: [[wide]]
+    items: [red_cylinder, yellow_block, green_block, blue_cylinder, label_cube]
+    support: {red_cylinder: table, yellow_block: table, green_block: table, blue_cylinder: table, label_cube: table}
+    tasks:
+      - {id: sort, goal: sort}
+
+  - id: s3_flat
+    views: {wide: scene3.jpg}
+    view_sets: [[wide]]
+    items: [red_cylinder, yellow_block, green_block, blue_cylinder, label_cube]
+    support: {red_cylinder: table, yellow_block: table, green_block: table, blue_cylinder: table, label_cube: table}
+    tasks:
+      - {id: sort, goal: sort}
+
+  - id: s4_flat
+    views: {wide: scene4.jpg}
+    view_sets: [[wide]]
+    items: [red_cylinder, yellow_block, green_block, blue_cylinder, label_cube]
+    support: {red_cylinder: table, yellow_block: table, green_block: table, blue_cylinder: table, label_cube: table}
+    tasks:
+      - {id: sort, goal: sort}
+      - id: stack_green_on_yellow
+        instruction: "Put the green block on top of the yellow block. Do not move anything else unless needed."
+        goal: [[on, green_block, yellow_block]]
+
+  - id: s1_build
+    note: "three-high tower: green on red cylinder on yellow"
+    views: {wide: scene1_build.jpg}
+    view_sets: [[wide]]
+    items: [red_cylinder, yellow_block, green_block, blue_cylinder, label_cube]
+    support: {green_block: red_cylinder, red_cylinder: yellow_block, yellow_block: table, blue_cylinder: table, label_cube: table}
+    tasks:
+      - {id: sort, goal: sort}
+      - id: tower_ybg
+        instruction: "Build one tower: yellow block at the bottom, blue cylinder on it, green block on top."
+        goal: [[on, blue_cylinder, yellow_block], [on, green_block, blue_cylinder]]
+
+  - id: s2_build
+    note: "same tower as s1_build, closer view"
+    views: {wide: scene2_build.jpg}
+    view_sets: [[wide]]
+    items: [red_cylinder, yellow_block, green_block, blue_cylinder, label_cube]
+    support: {green_block: red_cylinder, red_cylinder: yellow_block, yellow_block: table, blue_cylinder: table, label_cube: table}
+    tasks:
+      - {id: sort, goal: sort}
+
+  - id: s3_build
+    note: "two stacks: green on blue, red on yellow"
+    views: {wide: scene3_build.jpg}
+    view_sets: [[wide]]
+    items: [red_cylinder, yellow_block, green_block, blue_cylinder, label_cube]
+    support: {green_block: blue_cylinder, blue_cylinder: table, red_cylinder: yellow_block, yellow_block: table, label_cube: table}
+    tasks:
+      - {id: sort, goal: sort}
+      - id: only_blue
+        instruction: "Put only the blue cylinder onto the blue paper. Leave the other objects where they are unless they are in the way."
+        goal: [[in, blue_cylinder, blue_zone]]
+
+  - id: s4_build
+    note: "green on blue, others on the table"
+    views: {wide: scene4_build.jpg}
+    view_sets: [[wide]]
+    items: [red_cylinder, yellow_block, green_block, blue_cylinder, label_cube]
+    support: {green_block: blue_cylinder, blue_cylinder: table, red_cylinder: table, yellow_block: table, label_cube: table}
+    tasks:
+      - {id: sort, goal: sort}
+
+  - id: s5_reorder
+    note: "red cylinder on yellow block, green block on blue cylinder. Same scene from 4 viewpoints."
+    views:
+      close: scene5_reorder_close.jpg
+      top: scene5_reorder_top.jpg
+      higher: scene5_reorder_close_higher.jpg
+      wide: scene5_reorder.jpg
+    view_sets: [[close], [top], [wide], [close, top], [close, higher, top]]
+    items: [red_cylinder, yellow_block, green_block, blue_cylinder]
+    support: {red_cylinder: yellow_block, yellow_block: table, green_block: blue_cylinder, blue_cylinder: table}
+    tasks:
+      - id: swap_stacks
+        instruction: "Rearrange: the blue cylinder must rest on the yellow block and the green block must rest on the red cylinder."
+        goal: [[on, blue_cylinder, yellow_block], [on, green_block, red_cylinder]]
+      - {id: sort, goal: sort}

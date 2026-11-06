@@ -1,0 +1,52 @@
+# VLM registry. Key = short name used on the command line.
+#   hf             : Hugging Face model id
+#   patch          : pixels per visual token side after merging (Qwen2.5-VL: 28, Qwen3-VL: 32)
+#   reasoning      : model writes reasoning before the answer (<think> / <answer>) -> needs more tokens
+#   system         : optional system prompt
+#   max_new_tokens : default output budget
+#   vram_4bit_gb   : rough peak VRAM with 4-bit weights and 2 images (for planning which fit the GPU)
+#
+# Any other image-text-to-text model that works with AutoModelForImageTextToText + AutoProcessor
+# and a chat template can be added the same way (e.g. InternVL3.5-HF, Gemma 3, Llama 3.2 Vision).
+
+models:
+  qwen3-vl-4b:
+    hf: Qwen/Qwen3-VL-4B-Instruct
+    patch: 32
+    max_new_tokens: 1536
+    vram_4bit_gb: 5
+
+  qwen3-vl-8b:
+    hf: Qwen/Qwen3-VL-8B-Instruct
+    patch: 32
+    max_new_tokens: 1536
+    vram_4bit_gb: 8
+
+  qwen3-vl-8b-thinking:
+    hf: Qwen/Qwen3-VL-8B-Thinking
+    patch: 32
+    reasoning: true
+    max_new_tokens: 8192
+    vram_4bit_gb: 9
+
+  qwen2.5-vl-7b:
+    hf: Qwen/Qwen2.5-VL-7B-Instruct
+    patch: 28
+    max_new_tokens: 1536
+    vram_4bit_gb: 8
+
+  cosmos-reason1-7b:
+    hf: nvidia/Cosmos-Reason1-7B
+    patch: 28
+    reasoning: true
+    max_new_tokens: 4096
+    vram_4bit_gb: 8
+    system: |-
+      You are a helpful assistant. Answer the question in the following format:
+      <think>
+      your reasoning
+      </think>
+
+      <answer>
+      your answer
+      </answer>.
