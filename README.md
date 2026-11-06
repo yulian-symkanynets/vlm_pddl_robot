@@ -1,5 +1,7 @@
 # vlm_pddl: image → PDDL benchmark
 
+> **Start the planning server:** see [SERVER.md](SERVER.md) (start, web page, port forwarding, troubleshooting).
+
 Test which VLM turns photos of the table plus a task instruction into a **correct PDDL problem**,
 how long it takes, and whether the resulting plan would actually work in the real scene.
 
@@ -112,9 +114,9 @@ python client.py plan -i "swap the two stacks" --image images/scene5_reorder_clo
 python client.py perceive images/scene5_reorder_close.jpg     # image -> scene JSON (+ bytes saved)
 python client.py solve --scene examples/scenes/shelf.json --goal '[{"object":"white_cube","in":"low_shelf"}]'
 ```
-**Web page for testing:** `http://localhost:8000/` (upload photos or paste a scene JSON, type the task, get the plan as readable steps; example buttons included). If the model writes an unusable answer, the server retries up to 3 times (first greedy, then sampling).
-Interactive API docs: `http://localhost:8000/docs`. From another machine set `SERVER_URL=http://<gpu-ip>:8000`
-(WSL2: enable mirrored networking or add a Windows port proxy for 8000).
+**Web page for testing:** `http://127.0.0.1:8010/` (upload photos or paste a scene JSON, type the task, get the plan as readable steps; example buttons included). If the model writes an unusable answer, the server retries up to 3 times (first greedy, then sampling).
+Interactive API docs: `http://127.0.0.1:8010/docs`. From another machine set `SERVER_URL=http://<gpu-ip>:8010`
+(WSL2 on Windows: see [docs/WSL_SETUP.md](docs/WSL_SETUP.md), port forwarding script in `scripts/wsl_portproxy.ps1`).
 
 | Endpoint | Input | Use |
 |---|---|---|
