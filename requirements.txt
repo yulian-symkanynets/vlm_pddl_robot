@@ -12,3 +12,10 @@ accelerate
 bitsandbytes
 huggingface_hub
 packaging
+
+# Planning server (server.py) and test client (client.py)
+fastapi
+uvicorn
+python-multipart
+requests
+httpx

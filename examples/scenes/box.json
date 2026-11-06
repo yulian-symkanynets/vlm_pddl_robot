@@ -1,0 +1,12 @@
+{
+  "objects": [
+    {"id": "yellow_block", "label": "yellow block", "height_mm": 40},
+    {"id": "red_cylinder", "label": "red cylinder", "height_mm": 60},
+    {"id": "white_cube",   "label": "small white cube with a label", "height_mm": 30}
+  ],
+  "places": [
+    {"id": "cardboard_box", "kind": "box", "open": false, "capacity": 2}
+  ],
+  "support": {"red_cylinder": "yellow_block", "yellow_block": "table", "white_cube": "table"},
+  "hidden": []
+}

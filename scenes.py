@@ -171,13 +171,13 @@ def make_problem(name: str, env: dict, items: dict[str, dict], support: dict[str
     sfacts = state_facts(env, support, hidden)
     goal_str = '\n    '.join('(' + ' '.join(g) + ')' for g in goal)
     init = '\n    '.join(sfacts + efacts)
+    groups = [(items, 'item'), (places, 'place'), (slots, 'slot')]
+    objects = '\n    '.join(f'{" ".join(names)} - {t}' for names, t in groups if names)
     return (
         f'(define (problem {name})\n'
         f'  (:domain tabletop)\n'
         f'  (:objects\n'
-        f'    {" ".join(items)} - item\n'
-        f'    {" ".join(places)} - place\n'
-        f'    {" ".join(slots)} - slot)\n'
+        f'    {objects})\n'
         f'  (:init\n    {init})\n'
         f'  (:goal (and\n    {goal_str})))\n'
     )

@@ -1,0 +1,13 @@
+{
+  "objects": [
+    {"id": "blue_cylinder", "label": "tall blue cylinder", "height_mm": 70},
+    {"id": "white_cube",    "label": "small white cube",   "height_mm": 30},
+    {"id": "green_block",   "label": "green block",        "height_mm": 40}
+  ],
+  "places": [
+    {"id": "low_shelf",  "kind": "shelf", "capacity": 2, "clearance_mm": 50},
+    {"id": "high_shelf", "kind": "shelf", "capacity": 2, "clearance_mm": 120}
+  ],
+  "support": {"blue_cylinder": "table", "white_cube": "green_block", "green_block": "table"},
+  "hidden": []
+}

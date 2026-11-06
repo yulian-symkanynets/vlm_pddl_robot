@@ -77,6 +77,56 @@ Useful flags: `--quant 4bit|8bit|bf16`, `--no-hints` (model must find and name t
 
 Every run's prompt, raw answer, PDDL and plan are in `results/<timestamp>/raw/`.
 
+## Planning server (open world: no predefined scenes or tasks)
+
+The benchmark above needs `scenes.yaml` because it scores against known answers. The **server** does not:
+it gets only a user instruction plus a **scene abstraction** (JSON, ~0.4 KB) or image(s), and returns a verified plan.
+
+```
+scene JSON (from laptop) ─┐                       ┌─ ok               + plan (verified)
+   or image(s) ─► VLM ────┤ + instruction ─► VLM ─┤  need_observation  (support "unknown": send another view)
+     (perception)         │    (goal, text only)  │  clarify           (unknown object / unclear instruction)
+                          └──► Python → PDDL ─► planner ─► simulator   no_plan  (too tall, place full, ...)
+```
+
+Scene abstraction (everything except `support` optional; see `examples/scenes/`):
+```json
+{"objects": [{"id": "yellow_block", "label": "yellow block", "height_mm": 40}],
+ "places":  [{"id": "cardboard_box", "kind": "box", "open": false, "capacity": 2},
+             {"id": "low_shelf", "kind": "shelf", "capacity": 2, "clearance_mm": 50}],
+ "support": {"yellow_block": "table"},
+ "hidden":  []}
+```
+`support`: `"table"`, an object id, a place id, or `"unknown"`. Names are cleaned to PDDL ids; labels also work.
+
+```bash
+pip install -r requirements.txt                 # adds fastapi, uvicorn, requests
+./serve.sh start qwen3-vl-8b 4bit               # background; waits until the model is loaded
+./serve.sh status | logs | stop | restart
+./serve.sh start mock                           # no GPU: rule-based mock ("put X on/in Y")
+
+python client.py health
+python client.py demo                           # all cases in examples/cases.yaml, PASS/DIFF table
+python client.py plan -i "put the yellow block into the box" --scene examples/scenes/box.json
+python client.py plan -i "swap the two stacks" --image images/scene5_reorder_close.jpg -v
+python client.py perceive images/scene5_reorder_close.jpg     # image -> scene JSON (+ bytes saved)
+python client.py solve --scene examples/scenes/shelf.json --goal '[{"object":"white_cube","in":"low_shelf"}]'
+```
+Interactive API docs: `http://localhost:8000/docs`. From another machine set `SERVER_URL=http://<gpu-ip>:8000`
+(WSL2: enable mirrored networking or add a Windows port proxy for 8000).
+
+| Endpoint | Input | Use |
+|---|---|---|
+| `GET /health` | | model, uptime, request count |
+| `POST /plan` | `{"instruction", "scene"}` or `{"instruction", "images_b64"}` | main endpoint |
+| `POST /plan/upload` | multipart `instruction`, `files` (or `scene` as text) | images from curl / client |
+| `POST /perceive` | multipart `files` | image → scene JSON (what the laptop encoder will send) |
+| `POST /solve` | `{"scene", "goal"}` | planner only, no model |
+| `GET /requests/{id}` | | logged request + response (`logs/requests/<id>/`) |
+
+Every response has `status`, `message`, `goal`, `plan` (`[{"action","args","pddl"}]`), `problem_pddl`,
+`timings`, `received_bytes` (semantic-communication cost) and the raw `model_answers`.
+
 ## Validate by hand
 
 ```bash
@@ -103,6 +153,8 @@ problem or plan is extracted automatically.
 - **New model:** add an entry to `models.yaml` (any model that works with `AutoModelForImageTextToText`).
 
 ## Files
+
+- `openworld.py`, `server.py`, `client.py`, `serve.sh`, `examples/`: planning server (see above)
 
 | File | Purpose |
 |---|---|

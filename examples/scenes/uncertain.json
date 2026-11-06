@@ -1,0 +1,9 @@
+{
+  "objects": [
+    {"id": "red_cylinder", "label": "red cylinder", "height_mm": 60},
+    {"id": "yellow_block", "label": "yellow block", "height_mm": 40}
+  ],
+  "places": [{"id": "red_zone", "kind": "zone"}],
+  "support": {"red_cylinder": "unknown", "yellow_block": "table"},
+  "hidden": []
+}

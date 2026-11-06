@@ -1,0 +1,79 @@
+# Test cases for `python client.py demo`.
+#   scene  : scene abstraction file (semantic path, no image is sent)
+#   images : image files instead (the server runs perception)
+#   goal   : skip the goal model call (planner-only test via /solve)
+#   expect : status the server should return: ok | need_observation | clarify | no_plan | error
+#   real_model_only: the rule-based mock cannot understand this wording (skipped with --model mock)
+cases:
+  - name: rearrange stacks
+    scene: scenes/stacks.json
+    instruction: put the blue cylinder on the yellow block and the green block on the red cylinder
+    expect: ok
+
+  - name: rearrange stacks (free wording)
+    scene: scenes/stacks.json
+    instruction: swap the two stacks, so the cylinders end up on the other color's block
+    expect: ok
+    real_model_only: true
+
+  - name: box with closed lid
+    scene: scenes/box.json
+    instruction: put the yellow block into the box
+    expect: ok
+
+  - name: two objects into the box
+    scene: scenes/box.json
+    instruction: put the yellow block in the box and the white cube in the box
+    expect: ok
+
+  - name: box is full
+    scene: scenes/box.json
+    goal: [{object: yellow_block, in: cardboard_box}, {object: red_cylinder, in: cardboard_box},
+           {object: white_cube, in: cardboard_box}]
+    expect: no_plan
+
+  - name: shelf, object fits
+    scene: scenes/shelf.json
+    instruction: put the green block on the low shelf
+    expect: ok
+
+  - name: shelf, too tall
+    scene: scenes/shelf.json
+    goal: [{object: blue_cylinder, in: low_shelf}]
+    expect: no_plan
+
+  - name: shelf, tall object to the high shelf
+    scene: scenes/shelf.json
+    instruction: put the blue cylinder on the high shelf
+    expect: ok
+
+  - name: sort by color
+    scene: scenes/stacks.json
+    instruction: sort all objects into the zones by their color
+    expect: ok
+    real_model_only: true
+
+  - name: unknown object
+    scene: scenes/stacks.json
+    instruction: put the purple ball in the red zone
+    expect: clarify
+
+  - name: hidden support
+    scene: scenes/uncertain.json
+    instruction: put the yellow block in the red zone
+    expect: need_observation
+
+  - name: minimal scene (only support relations)
+    scene: scenes/minimal.json
+    instruction: put the yellow block on the blue cylinder
+    expect: ok
+
+  - name: from image (server does perception)
+    images: [../images/scene5_reorder_close.jpg]
+    instruction: put the blue cylinder on the yellow block and the green block on the red cylinder
+    expect: ok
+
+  - name: from two views
+    images: [../images/scene5_reorder_close.jpg, ../images/scene5_reorder_top.jpg]
+    instruction: stack the green block on the red cylinder
+    expect: ok

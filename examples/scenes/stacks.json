@@ -1,0 +1,19 @@
+{
+  "objects": [
+    {"id": "red_cylinder",  "label": "red cylinder",  "height_mm": 60},
+    {"id": "yellow_block",  "label": "yellow block",  "height_mm": 40},
+    {"id": "green_block",   "label": "green block",   "height_mm": 40},
+    {"id": "blue_cylinder", "label": "blue cylinder", "height_mm": 60}
+  ],
+  "places": [
+    {"id": "red_zone",    "kind": "zone", "capacity": 2},
+    {"id": "yellow_zone", "kind": "zone", "capacity": 2},
+    {"id": "blue_zone",   "kind": "zone", "capacity": 2},
+    {"id": "green_zone",  "kind": "zone", "capacity": 2}
+  ],
+  "support": {
+    "red_cylinder": "yellow_block", "yellow_block": "table",
+    "green_block": "blue_cylinder", "blue_cylinder": "table"
+  },
+  "hidden": []
+}
