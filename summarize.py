@@ -15,7 +15,7 @@ from statistics import mean, median
 COLUMNS = [
     ('n', 'runs'),
     ('success_%', 'plan works in the real scene'),
-    ('parsed_%', 'PDDL parsed (pddl/json modes)'),
+    ('parsed_%', 'PDDL parsed (pddl/json/split modes)'),
     ('support_f1', 'perception: on/on-table/in facts vs gt'),
     ('support_exact_%', 'all support facts correct'),
     ('goal_exact_%', 'goal facts identical to gt'),
@@ -40,7 +40,7 @@ def med(xs):
 
 
 def summarize(rows):
-    pdj = [r for r in rows if r['mode'] in ('pddl', 'json')]
+    pdj = [r for r in rows if r['mode'] in ('pddl', 'json', 'split')]
     return {
         'n': len(rows),
         'success_%': pct(r.get('success') for r in rows),

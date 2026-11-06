@@ -141,3 +141,18 @@ def test_normalize_goal_forms():
     assert normalize_goal([{'object': 'a', 'in': 'red_zone'}, {'object': 'b', 'on': 'table'},
                            ['on', 'c', 'd']]) == [('in', 'a', 'red_zone'), ('on-table', 'b'), ('on', 'c', 'd')]
     assert normalize_goal([{'thing': 'a'}]) is None
+
+
+def test_goal_list_in_wrong_order_is_repaired():
+    from evaluate import normalize_goal
+    assert normalize_goal([['blue_cylinder', 'on', 'yellow_block']]) == [('on', 'blue_cylinder', 'yellow_block')]
+    assert normalize_goal([['on', 'blue_cylinder', 'table']]) == [('on-table', 'blue_cylinder')]
+    assert normalize_goal([['stacked', 'a', 'b']]) is None
+
+
+def test_goal_with_unknown_name_is_a_goal_error_not_a_parse_error():
+    from prompts import SPLIT_SEP
+    scene_ans = json.dumps({'support': dict(S5.support)})
+    goal_ans = json.dumps({'goal': [{'object': 'blue_cube', 'on': 'yellow_block'}]})
+    r = evaluate('split', scene_ans + SPLIT_SEP + goal_ans, S5, SWAP)
+    assert r['stage'] == 'extract' and 'unknown names: blue_cube' in r['error']

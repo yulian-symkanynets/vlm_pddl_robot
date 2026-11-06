@@ -41,14 +41,28 @@ def ground_truth(scene: Scene, task: Task, planner: str = 'auto') -> dict:
     return _GT_CACHE[key]
 
 
+GOAL_PREDICATES = {'on': 3, 'in': 3, 'on-table': 2}
+
+
 def normalize_goal(goal) -> list[tuple[str, ...]] | None:
-    """Accept ["on","x","y"] lists or named fields {"object": x, "on"/"in": y}."""
+    """Accept ["on","x","y"], ["x","on","y"] lists or named fields {"object": x, "on"/"in": y}.
+
+    Returns None for anything else, so a malformed goal is reported as a goal error
+    instead of producing broken PDDL that only fails later in the parser.
+    """
     if not isinstance(goal, list) or not goal:
         return None
     out = []
     for g in goal:
         if isinstance(g, list) and g:
-            out.append(tuple(str(w) for w in g))
+            t = [str(w) for w in g]
+            if t[0] not in GOAL_PREDICATES and len(t) == 3 and t[1] in GOAL_PREDICATES:
+                t = [t[1], t[0], t[2]]                 # ["x", "on", "y"] -> ["on", "x", "y"]
+            if t[0] == 'on' and len(t) == 3 and t[2] == 'table':
+                t = ['on-table', t[1]]
+            if t[0] not in GOAL_PREDICATES or len(t) != GOAL_PREDICATES[t[0]]:
+                return None
+            out.append(tuple(t))
         elif isinstance(g, dict) and 'object' in g:
             x = str(g['object'])
             if 'in' in g:
@@ -89,8 +103,12 @@ def _problem_from_json(js: dict, scene: Scene, task: Task) -> tuple[str | None, 
             ', '.join(k for k, v in support.items() if v == 'unknown')
     goal = normalize_goal(js.get('goal'))
     if goal is None:
-        return None, 'json without a valid "goal" list'
+        return None, f'invalid goal: {json.dumps(js.get("goal"))[:200]}'
     items = {i: scene.items.get(i, {}) for i in support}
+    known = set(items) | set(scene.env['places'])
+    unknown = sorted({w for g in goal for w in g[1:] if w not in known})
+    if unknown:
+        return None, f'goal uses unknown names: {", ".join(unknown)}'
     hidden = [h for h in js.get('hidden', []) if h in items]
     try:
         return make_problem(f'{scene.id}-{task.task_id}-vlm', scene.env, items, support,
