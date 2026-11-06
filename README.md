@@ -112,6 +112,7 @@ python client.py plan -i "swap the two stacks" --image images/scene5_reorder_clo
 python client.py perceive images/scene5_reorder_close.jpg     # image -> scene JSON (+ bytes saved)
 python client.py solve --scene examples/scenes/shelf.json --goal '[{"object":"white_cube","in":"low_shelf"}]'
 ```
+**Web page for testing:** `http://localhost:8000/` (upload photos or paste a scene JSON, type the task, get the plan as readable steps; example buttons included). If the model writes an unusable answer, the server retries up to 3 times (first greedy, then sampling).
 Interactive API docs: `http://localhost:8000/docs`. From another machine set `SERVER_URL=http://<gpu-ip>:8000`
 (WSL2: enable mirrored networking or add a Windows port proxy for 8000).
 
@@ -154,7 +155,7 @@ problem or plan is extracted automatically.
 
 ## Files
 
-- `openworld.py`, `server.py`, `client.py`, `serve.sh`, `examples/`: planning server (see above)
+- `openworld.py`, `server.py`, `client.py`, `serve.sh`, `web/index.html`, `examples/`: planning server (see above)
 
 | File | Purpose |
 |---|---|

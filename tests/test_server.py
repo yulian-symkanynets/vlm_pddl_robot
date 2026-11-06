@@ -117,3 +117,37 @@ def test_model_question_becomes_clarify():
             return {'text': '{"goal": [], "question": "Which block?"}', 'generate_s': 0}
     res = openworld.run('put the block away', scene=scene('stacks.json'), vlm=Asks())
     assert res['status'] == 'clarify' and res['message'] == 'Which block?'
+
+
+def test_web_page_and_examples(client):
+    r = client.get('/')
+    assert r.status_code == 200 and 'Robot Task Planner' in r.text
+    ex = client.get('/examples').json()
+    assert any(e.get('images') for e in ex) and any(e.get('scene') for e in ex)
+    assert client.get(ex[-1]['images'][0] if ex[-1].get('images') else '/images/scene5_reorder_close.jpg').status_code == 200
+
+
+def test_unusable_model_answer_is_retried():
+    class FlakyThenGood(openworld.RuleMock):
+        calls = 0
+        def generate(self, image_paths, prompt, max_visual_tokens=1024, max_new_tokens=None,
+                     sample=False, context=None):
+            FlakyThenGood.calls += 1
+            if context['mode'] == 'ow_goal' and not sample:
+                return {'text': 'Sure! The goal is blue on yellow.', 'generate_s': 0}   # no JSON
+            return super().generate(image_paths, prompt, max_visual_tokens, max_new_tokens, sample, context)
+    res = openworld.run_until_ok(3, instruction='put the green block on the red cylinder',
+                                 scene=scene('stacks.json'), vlm=FlakyThenGood())
+    assert res['status'] == 'ok' and [a['status'] for a in res['attempts']] == ['error', 'ok']
+
+
+def test_real_answers_are_not_retried():
+    res = openworld.run_until_ok(3, instruction='put the purple ball in the red zone',
+                                 scene=scene('stacks.json'), vlm=openworld.RuleMock())
+    assert res['status'] == 'clarify' and len(res['attempts']) == 1
+
+
+def test_mock_understands_both_parts_of_and():
+    res = openworld.run('put the blue cylinder on the yellow block and the green block on the red cylinder',
+                        scene=scene('stacks.json'), vlm=openworld.RuleMock())
+    assert res['status'] == 'ok' and len(res['goal']) == 2 and len(res['plan']) == 6

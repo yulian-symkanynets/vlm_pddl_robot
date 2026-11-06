@@ -329,7 +329,7 @@ def plan_for(sc: dict, goal, planner: str = 'auto') -> dict:
 
 # --------------------------------------------------------------------------- end to end
 def run(instruction: str | None = None, scene: dict | None = None, images=None, vlm=None,
-        goal=None, planner: str = 'auto', max_visual_tokens: int = 1024) -> dict:
+        goal=None, planner: str = 'auto', max_visual_tokens: int = 1024, sample: bool = False) -> dict:
     """The server's job. Give `scene` (semantic path) or `images` (+ vlm). `goal` skips the goal call."""
     t0 = time.perf_counter()
     res = {'status': 'error', 'message': None, 'instruction': instruction, 'timings': {}, 'model_answers': {}}
@@ -345,7 +345,7 @@ def run(instruction: str | None = None, scene: dict | None = None, images=None, 
             return done('error', 'send "scene" (JSON) or image(s)')
         if vlm is None:
             return done('error', 'no model loaded, images cannot be processed')
-        g = vlm.generate(list(images), perceive_prompt(len(images)), max_visual_tokens,
+        g = vlm.generate(list(images), perceive_prompt(len(images)), max_visual_tokens, sample=sample,
                          context={'mode': 'ow_perceive'})
         res['model_answers']['perceive'] = g['text']
         res['timings']['perceive_s'] = g['generate_s']
@@ -368,7 +368,7 @@ def run(instruction: str | None = None, scene: dict | None = None, images=None, 
             return done('error', 'send "instruction" or "goal"')
         if vlm is None:
             return done('error', 'no model loaded, the instruction cannot be interpreted')
-        g = vlm.generate([], goal_prompt(sc, instruction), context={'mode': 'ow_goal', 'scene': sc,
+        g = vlm.generate([], goal_prompt(sc, instruction), sample=sample, context={'mode': 'ow_goal', 'scene': sc,
                                                                      'instruction': instruction})
         res['model_answers']['goal'] = g['text']
         res['timings']['goal_s'] = g['generate_s']
@@ -393,6 +393,27 @@ def run(instruction: str | None = None, scene: dict | None = None, images=None, 
     status, msg = p.pop('status'), p.pop('message')
     res.update(p)
     return done(status, msg)
+
+
+def retryable(res: dict) -> bool:
+    """A model formatting slip (not a real answer like clarify / no_plan / need_observation)."""
+    if not res['model_answers']:
+        return False                                  # nothing came from the model
+    msg = res.get('message') or ''
+    return res['status'] == 'error' or msg.startswith('goal has an unexpected format')
+
+
+def run_until_ok(attempts: int = 3, **kw) -> dict:
+    """First try greedy; if the model wrote something unusable, ask again with sampling."""
+    history = []
+    for k in range(max(1, attempts)):
+        res = run(**kw, sample=k > 0)
+        history.append({'attempt': k + 1, 'status': res['status'], 'message': res['message'],
+                        'total_s': res['timings'].get('total_s')})
+        if not retryable(res):
+            break
+    res['attempts'] = history
+    return res
 
 
 # --------------------------------------------------------------------------- mock model
@@ -447,7 +468,7 @@ class RuleMock:
     def _goal(self, instruction: str, sc: dict) -> dict:
         goal = []
         for part in re.split(r'\s*(?:,|;|\band\b|\bthen\b)\s*', instruction.lower()):
-            m = re.match(r'(?:please\s+)?(?:put|place|move|stack|set)\s+(.+?)\s+'
+            m = re.match(r'(?:please\s+)?(?:(?:put|place|move|stack|set)\s+)?(.+?)\s+'
                          r'(on top of|onto|on|into|inside|in|to)\s+(.+?)\.?$', part.strip())
             if not m:
                 continue

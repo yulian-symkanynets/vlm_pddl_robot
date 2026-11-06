@@ -5,7 +5,11 @@ Start (background):   ./serve.sh start            (see ./serve.sh help)
 Without a GPU:        python server.py --model mock
 API docs in browser:  http://localhost:8000/docs
 
+Web page:             http://localhost:8000/   (upload photos, type the task, see the plan)
+
 Endpoints
+  GET  /                the test web page (web/index.html)
+  GET  /examples        example cases for the web page
   GET  /health          model, uptime, number of requests
   GET  /domain          the fixed PDDL domain
   POST /plan            JSON  {"instruction", "scene"}            semantic path, no image (main one)
@@ -30,7 +34,9 @@ from datetime import datetime
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.staticfiles import StaticFiles
+import yaml
 from pydantic import BaseModel, Field
 
 import openworld
@@ -45,6 +51,7 @@ class PlanRequest(BaseModel):
     images_b64: list[str] | None = Field(None, description='fallback when no scene is sent')
     goal: list | None = Field(None, description='optional: skip the goal model call')
     planner: str = 'auto'
+    attempts: int = Field(3, ge=1, le=5, description='retries when the model answer is unusable')
 
 
 class SolveRequest(BaseModel):
@@ -88,6 +95,28 @@ def create_app(vlm, max_visual_tokens: int = 1024, log_dir: Path = LOG_DIR) -> F
         (d / 'response.json').write_text(json.dumps(result, indent=2))
         return result
 
+    @app.get('/', include_in_schema=False)
+    def index():
+        return FileResponse(ROOT / 'web' / 'index.html')
+
+    app.mount('/images', StaticFiles(directory=ROOT / 'images'), name='images')
+
+    @app.get('/examples')
+    def examples():
+        """Example cases for the web page (scene JSON inline, images as URLs)."""
+        base = ROOT / 'examples'
+        out = []
+        for c in yaml.safe_load((base / 'cases.yaml').read_text())['cases']:
+            if c.get('goal'):
+                continue                              # planner-only cases have no instruction
+            e = {'name': c['name'], 'instruction': c['instruction'], 'expect': c['expect']}
+            if c.get('scene'):
+                e['scene'] = json.loads((base / c['scene']).read_text())
+            if c.get('images'):
+                e['images'] = ['/images/' + Path(p).name for p in c['images']]
+            out.append(e)
+        return out
+
     @app.get('/health')
     def health():
         return {'status': 'up', 'model': getattr(vlm, 'key', None), 'hf': getattr(vlm, 'hf', None),
@@ -112,13 +141,15 @@ def create_app(vlm, max_visual_tokens: int = 1024, log_dir: Path = LOG_DIR) -> F
         rid, d = new_request()
         images = save_images(d, blobs)
         received = len(json.dumps(req.scene)) if req.scene else sum(len(x) for _, x in blobs)
-        res = openworld.run(instruction=req.instruction, scene=req.scene, images=images, vlm=model,
-                            goal=req.goal, planner=req.planner, max_visual_tokens=max_visual_tokens)
+        res = openworld.run_until_ok(req.attempts, instruction=req.instruction, scene=req.scene,
+                                     images=images, vlm=model, goal=req.goal, planner=req.planner,
+                                     max_visual_tokens=max_visual_tokens)
         return finish(rid, d, {**body, 'images': [p.name for p in images]}, res, received)
 
     @app.post('/plan/upload')
     async def plan_upload(instruction: str = Form(...), files: list[UploadFile] = File(default=[]),
-                          scene: str | None = Form(None), planner: str = Form('auto')):
+                          scene: str | None = Form(None), planner: str = Form('auto'),
+                          attempts: int = Form(3)):
         req = {'instruction': instruction, 'planner': planner}
         received = 0
         if scene:
@@ -131,8 +162,9 @@ def create_app(vlm, max_visual_tokens: int = 1024, log_dir: Path = LOG_DIR) -> F
         blobs = [(f.filename, await f.read()) for f in files] if not scene else []
         received += sum(len(b) for _, b in blobs)
         images = save_images(d, blobs)
-        res = openworld.run(instruction=instruction, scene=req.get('scene'), images=images, vlm=model,
-                            planner=planner, max_visual_tokens=max_visual_tokens)
+        res = openworld.run_until_ok(min(max(attempts, 1), 5), instruction=instruction,
+                                     scene=req.get('scene'), images=images, vlm=model, planner=planner,
+                                     max_visual_tokens=max_visual_tokens)
         return finish(rid, d, {**req, 'images': [p.name for p in images]}, res, received)
 
     @app.post('/perceive')
