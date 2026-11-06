@@ -26,7 +26,7 @@ from datetime import datetime
 from pathlib import Path
 
 from evaluate import evaluate, ground_truth
-from prompts import MODES, build_prompt
+from prompts import MODES, SPLIT_SEP, build_goal_prompt, build_prompt
 from scenes import ROOT, load_config
 from vlm import load_model
 
@@ -97,6 +97,9 @@ def main():
                 seen.add(mode)
                 print(f'===== {mode} | {scene.id} {task.task_id} {views}\n')
                 print(build_prompt(mode, scene, task, len(views), not args.no_hints), '\n')
+                if mode == 'split':
+                    print('===== split, call 2 (text only)\n')
+                    print(build_goal_prompt(scene, task, not args.no_hints), '\n')
         print(f'{len(all_jobs)} runs per model')
         return
 
@@ -130,6 +133,21 @@ def main():
             try:
                 gen = model.generate(image_paths, prompt, mvt, args.max_new_tokens, args.sample,
                                      context={'scene': scene, 'task': task, 'mode': mode})
+                if mode == 'split':         # call 2: text only, instruction -> goal
+                    goal_prompt = build_goal_prompt(scene, task, not args.no_hints)
+                    g2 = model.generate([], goal_prompt, mvt, args.max_new_tokens, args.sample,
+                                        context={'scene': scene, 'task': task, 'mode': 'split_goal'})
+                    prompt = prompt + SPLIT_SEP + goal_prompt
+                    gen = {**gen,
+                           'text': gen['text'] + SPLIT_SEP + g2['text'],
+                           'scene_generate_s': gen['generate_s'], 'goal_generate_s': g2['generate_s'],
+                           'scene_output_tokens': gen['output_tokens'], 'goal_output_tokens': g2['output_tokens'],
+                           'generate_s': round(gen['generate_s'] + g2['generate_s'], 3),
+                           'preprocess_s': round(gen['preprocess_s'] + g2['preprocess_s'], 3),
+                           'input_tokens': gen['input_tokens'] + g2['input_tokens'],
+                           'output_tokens': gen['output_tokens'] + g2['output_tokens'],
+                           'peak_vram_gb': max(gen['peak_vram_gb'], g2['peak_vram_gb']),
+                           'truncated': gen['truncated'] or g2['truncated']}
             except Exception as e:          # e.g. CUDA OOM: record and continue
                 gen = {'text': '', 'error': f'{type(e).__name__}: {e}'}
                 try:

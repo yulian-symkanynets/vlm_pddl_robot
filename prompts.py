@@ -3,12 +3,16 @@
 pddl : the VLM writes the whole PDDL problem (objects, init, goal) for the fixed domain.
 json : the VLM writes only a small scene JSON (support relations + goal); Python generates the PDDL.
 plan : baseline M1, the VLM writes the action sequence directly (no planner).
+split: two separate calls, like the semantic-communication design:
+       1) images -> scene JSON only (no task given)        = laptop side
+       2) text only: instruction -> goal (named fields)      = server side
 """
 from __future__ import annotations
 
 from scenes import DOMAIN_PATH, Scene, Task, env_description
 
-MODES = ('pddl', 'json', 'plan')
+MODES = ('pddl', 'json', 'plan', 'split')
+SPLIT_SEP = '\n##### GOAL CALL #####\n'
 
 SCENE_INTRO = (
     'The image(s) show ONE unchanged tabletop scene{views}. A robot arm with a vacuum gripper '
@@ -105,4 +109,42 @@ Every action must satisfy its preconditions in the state at that moment
 (for example an object can only be picked if nothing rests on it).
 Return only the plan inside ``` ... ```."""
 
+    if mode == 'split':             # call 1: perception only, the task is NOT mentioned
+        return f"""{intro}
+
+{objs}
+
+Places: {' '.join(scene.env['places'])}
+
+Describe ONLY the current arrangement. Do not plan anything.
+- "support": for every object, what it rests on DIRECTLY right now: "table", the ID of the object
+  directly below it, or a place ID. Look carefully for objects standing on top of other objects.
+  Use "unknown" only if the views really do not show it.
+- "hidden": IDs of objects that are not visible well enough to grasp (usually empty).
+
+Return only JSON:
+{{"support": {{"<id>": "<support>", ...}}, "hidden": []}}"""
+
     raise ValueError(f'unknown mode {mode}')
+
+
+def build_goal_prompt(scene: Scene, task: Task, hints: bool = True) -> str:
+    """Call 2 of split mode: text only, no image, no current state."""
+    objs = object_block(scene, hints).replace('Movable objects', 'Objects')
+    return f"""A robot will rearrange objects on a table.
+
+{objs}
+
+Places: {' '.join(scene.env['places'])}
+
+Instruction: {task.instruction}
+
+Write the DESIRED FINAL arrangement that the instruction asks for (not the current one, which you do not know).
+List only what the instruction requires, one entry per requirement:
+  {{"object": "<id>", "on": "<id of the object it must rest on>"}}
+  {{"object": "<id>", "in": "<place id>"}}
+  {{"object": "<id>", "on": "table"}}
+"object" is always the one that is moved or placed on top.
+
+Return only JSON:
+{{"goal": [ ... ]}}"""

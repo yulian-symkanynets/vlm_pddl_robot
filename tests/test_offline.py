@@ -115,3 +115,29 @@ def test_too_tall_for_shelf_is_unsolvable():
     p = parse_problem(make_problem('shelf', env, S5.items, S5.support, [('in', 'yellow_block', 'shelf_low')]))
     status, acts, _, _ = solve(p)
     assert acts is None
+
+
+def test_split_mode_named_goal():
+    from prompts import SPLIT_SEP
+    scene_ans = json.dumps({'support': dict(S5.support), 'hidden': []})
+    goal_ans = '```json\n{"goal": [{"object": "blue_cylinder", "on": "yellow_block"},' \
+               ' {"object": "green_block", "on": "red_cylinder"}]}\n```'
+    r = evaluate('split', scene_ans + SPLIT_SEP + goal_ans, S5, SWAP)
+    assert r['success'] and r['goal_exact']
+
+
+def test_split_mode_goal_copied_from_scene_fails():
+    """The error Qwen3-VL made in json mode: goal = current arrangement."""
+    from prompts import SPLIT_SEP
+    scene_ans = json.dumps({'support': dict(S5.support)})
+    goal_ans = json.dumps({'goal': [{'object': 'red_cylinder', 'on': 'yellow_block'},
+                                    {'object': 'green_block', 'on': 'blue_cylinder'}]})
+    r = evaluate('split', scene_ans + SPLIT_SEP + goal_ans, S5, SWAP)
+    assert not r['success'] and r['goal_missing']
+
+
+def test_normalize_goal_forms():
+    from evaluate import normalize_goal
+    assert normalize_goal([{'object': 'a', 'in': 'red_zone'}, {'object': 'b', 'on': 'table'},
+                           ['on', 'c', 'd']]) == [('in', 'a', 'red_zone'), ('on-table', 'b'), ('on', 'c', 'd')]
+    assert normalize_goal([{'thing': 'a'}]) is None

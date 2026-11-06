@@ -84,7 +84,7 @@ class HFVLM:
             messages.append({'role': 'system', 'content': [{'type': 'text', 'text': self.spec['system']}]})
         messages.append({'role': 'user', 'content': content})
         text = proc.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-        inputs = proc(text=[text], images=images, padding=True, return_tensors='pt')
+        inputs = proc(text=[text], images=images or None, padding=True, return_tensors='pt')
         inputs.pop('token_type_ids', None)
         visual_tokens = None
         if 'image_grid_thw' in inputs:
@@ -155,13 +155,25 @@ class MockVLM:
             if corrupt and m:
                 text = text.replace(m.group(0), f'(on-table {m.group(1)})', 1)
             text = f'```pddl\n{text}```'
-        elif mode == 'json':
+        elif mode in ('json', 'split'):
             support = dict(scene.support)
             stacked = [x for x, s in support.items() if s in scene.items]
             if corrupt and stacked:
                 support[stacked[0]] = 'table'
-            text = json.dumps({'support': support, 'hidden': scene.hidden,
-                               'goal': [list(g) for g in task.goal]})
+            js = {'support': support, 'hidden': scene.hidden}
+            if mode == 'json':
+                js['goal'] = [list(g) for g in task.goal]
+            text = json.dumps(js)
+        elif mode == 'split_goal':
+            goal = []
+            for g in task.goal:
+                if g[0] == 'in':
+                    goal.append({'object': g[1], 'in': g[2]})
+                elif g[0] == 'on-table':
+                    goal.append({'object': g[1], 'on': 'table'})
+                else:
+                    goal.append({'object': g[1], 'on': g[2]})
+            text = json.dumps({'goal': goal})
         else:
             _, acts, _, _ = solve(parse_problem(gt_problem(scene, task)))
             if corrupt:

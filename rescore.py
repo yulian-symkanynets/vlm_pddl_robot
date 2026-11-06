@@ -16,7 +16,7 @@ import re
 from collections import defaultdict
 from pathlib import Path
 
-from evaluate import evaluate, ground_truth
+from evaluate import evaluate, ground_truth, merge_split
 from planning import _balanced, extract_json, extract_problem
 from scenes import load_config
 
@@ -42,7 +42,13 @@ def variants(mode: str, answer: str, scene, task) -> dict[str, str | None]:
         return {'as_is': answer,
                 'oracle_goal': swap_goal(prob, gt_goal_sec),
                 'oracle_scene': swap_goal(gt['text'], model_goal) if model_goal else None}
-    if mode == 'json':
+    if mode in ('json', 'split'):
+        if mode == 'split':
+            merged, _ = merge_split(answer)
+            if merged is None:
+                return {'as_is': answer, 'oracle_goal': None, 'oracle_scene': None}
+            answer = merged
+            mode = 'json'
         raw = extract_json(answer)
         try:
             js = json.loads(raw) if raw else None
@@ -52,7 +58,7 @@ def variants(mode: str, answer: str, scene, task) -> dict[str, str | None]:
             return {'as_is': answer, 'oracle_goal': None, 'oracle_scene': None}
         a = dict(js, goal=[list(g) for g in task.goal])
         b = dict(js, support=dict(scene.support), hidden=list(scene.hidden))
-        return {'as_is': answer, 'oracle_goal': json.dumps(a), 'oracle_scene': json.dumps(b)}
+        return {'as_is': json.dumps(js), 'oracle_goal': json.dumps(a), 'oracle_scene': json.dumps(b)}
     return {'as_is': answer}
 
 
@@ -74,12 +80,13 @@ def main():
         scene = cfg.scene(r['scene'])
         task = next(t for t in scene.tasks if t.task_id == r['task'])
         res = {}
+        emode = 'json' if r['mode'] == 'split' else r['mode']
         for name, text in variants(r['mode'], answer, scene, task).items():
-            ok = bool(text) and evaluate(r['mode'], text, scene, task)['success']
+            ok = bool(text) and evaluate(emode, text, scene, task)['success']
             res[name] = ok
             table[(r['model'], r['mode'])][name].append(ok)
         out_lines.append(f"{r['run_id']:70s} " + '  '.join(f'{k}={"OK" if v else "--"}' for k, v in res.items()))
-        if args.verbose and r['mode'] in ('pddl', 'json'):
+        if args.verbose and r['mode'] in ('pddl', 'json', 'split'):
             ev = evaluate(r['mode'], answer, scene, task)
             out_lines.append(f"      support missed={ev.get('support_missing')} invented={ev.get('support_extra')}")
             out_lines.append(f"      goal    missed={ev.get('goal_missing')} invented={ev.get('goal_extra')}")

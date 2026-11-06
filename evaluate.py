@@ -17,6 +17,7 @@ import time
 
 from planning import (extract_json, extract_plan, extract_problem, goal_facts, init_facts,
                       lint_state, parse_problem, prf, simulate, solve, SUPPORT_PREDICATES)
+from prompts import SPLIT_SEP
 from scenes import Scene, Task, gt_problem, make_problem
 
 _GT_CACHE: dict = {}
@@ -40,6 +41,44 @@ def ground_truth(scene: Scene, task: Task, planner: str = 'auto') -> dict:
     return _GT_CACHE[key]
 
 
+def normalize_goal(goal) -> list[tuple[str, ...]] | None:
+    """Accept ["on","x","y"] lists or named fields {"object": x, "on"/"in": y}."""
+    if not isinstance(goal, list) or not goal:
+        return None
+    out = []
+    for g in goal:
+        if isinstance(g, list) and g:
+            out.append(tuple(str(w) for w in g))
+        elif isinstance(g, dict) and 'object' in g:
+            x = str(g['object'])
+            if 'in' in g:
+                out.append(('in', x, str(g['in'])))
+            elif str(g.get('on')) == 'table':
+                out.append(('on-table', x))
+            elif 'on' in g:
+                out.append(('on', x, str(g['on'])))
+            else:
+                return None
+        else:
+            return None
+    return out
+
+
+def merge_split(text: str) -> tuple[str | None, str | None]:
+    """Split mode: combine the scene answer and the goal answer into one json answer."""
+    scene_txt, _, goal_txt = text.partition(SPLIT_SEP)
+    out = {}
+    for name, part in (('scene', scene_txt), ('goal', goal_txt)):
+        raw = extract_json(part)
+        if raw is None:
+            return None, f'no JSON in the {name} answer'
+        try:
+            out.update(json.loads(raw))
+        except json.JSONDecodeError as e:
+            return None, f'bad JSON in the {name} answer: {e}'
+    return json.dumps(out), None
+
+
 def _problem_from_json(js: dict, scene: Scene, task: Task) -> tuple[str | None, str | None]:
     """Return (problem_text, error). Uses the same generator as the ground truth."""
     if not isinstance(js, dict) or not isinstance(js.get('support'), dict):
@@ -48,14 +87,14 @@ def _problem_from_json(js: dict, scene: Scene, task: Task) -> tuple[str | None, 
     if 'unknown' in support.values():
         return None, 'need_observation: unknown support for ' + \
             ', '.join(k for k, v in support.items() if v == 'unknown')
-    goal = js.get('goal')
-    if not isinstance(goal, list) or not all(isinstance(g, list) and g for g in goal):
+    goal = normalize_goal(js.get('goal'))
+    if goal is None:
         return None, 'json without a valid "goal" list'
     items = {i: scene.items.get(i, {}) for i in support}
     hidden = [h for h in js.get('hidden', []) if h in items]
     try:
         return make_problem(f'{scene.id}-{task.task_id}-vlm', scene.env, items, support,
-                            [tuple(str(w) for w in g) for g in goal], hidden), None
+                            goal, hidden), None
     except ValueError as e:
         return None, f'invalid scene: {e}'
 
@@ -85,7 +124,12 @@ def evaluate(mode: str, text: str, scene: Scene, task: Task, planner: str = 'aut
         if ptext is None:
             r['error'] = 'no (define (problem ...)) found'
             return r
-    elif mode == 'json':
+    elif mode in ('json', 'split'):
+        if mode == 'split':
+            text, err = merge_split(text)
+            if err:
+                r['error'] = err
+                return r
         raw = extract_json(text)
         if raw is None:
             r['error'] = 'no JSON found'
