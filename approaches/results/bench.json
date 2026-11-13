@@ -1,0 +1,589 @@
+{
+ "meta": {
+  "system": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "python": "3.13.9",
+  "date": "2026-11-12",
+  "scenes_per_size": 300
+ },
+ "offline": {
+  "policy_rounds": [
+   {
+    "round": 1,
+    "solved": 6,
+    "of": 42,
+    "error": "illegal action MOVE(o0 -> green_zone): green_zone has no free ground pose"
+   },
+   {
+    "round": 2,
+    "solved": 11,
+    "of": 42,
+    "error": "policy returned None but these objects are not in their zone: ['o0']"
+   },
+   {
+    "round": 3,
+    "solved": 37,
+    "of": 42,
+    "error": "policy returned None but these objects are not in their zone: ['o0']"
+   },
+   {
+    "round": 4,
+    "solved": 37,
+    "of": 42,
+    "error": "policy returned None but these objects are not in their zone: ['o0']"
+   }
+  ],
+  "heuristic_candidates": [
+   {
+    "candidate": 1,
+    "solved": 20,
+    "of": 20,
+    "expansions": 104
+   },
+   {
+    "candidate": 2,
+    "solved": 20,
+    "of": 20,
+    "expansions": 99
+   },
+   {
+    "candidate": 3,
+    "solved": 20,
+    "of": 20,
+    "expansions": 111
+   }
+  ],
+  "learned": {
+   "train_scenes": 400,
+   "train_states": 1697,
+   "top1_accuracy": 0.7760754272245138,
+   "data_and_training_s": 0.44514224999875296
+  }
+ },
+ "strategies": {
+  "graph": {
+   "4": {
+    "kind": "symbolic",
+    "scenes": 300,
+    "valid": 300,
+    "p50_ms": 0.022249994799494743,
+    "p95_ms": 0.032500000088475645,
+    "max_ms": 0.06574999133590609,
+    "mean_moves": 3.83,
+    "moves_vs_optimal": 1.0041666666666667,
+    "llm_calls_per_request": 0.0
+   },
+   "6": {
+    "kind": "symbolic",
+    "scenes": 300,
+    "valid": 300,
+    "p50_ms": 0.04199999966658652,
+    "p95_ms": 0.06079098966438323,
+    "max_ms": 0.7316250121220946,
+    "mean_moves": 5.706666666666667,
+    "moves_vs_optimal": 1.009,
+    "llm_calls_per_request": 0.0
+   },
+   "8": {
+    "kind": "symbolic",
+    "scenes": 300,
+    "valid": 300,
+    "p50_ms": 0.060417005443014205,
+    "p95_ms": 0.09020799188874662,
+    "max_ms": 1.7086669977288693,
+    "mean_moves": 7.516666666666667,
+    "moves_vs_optimal": null,
+    "llm_calls_per_request": 0.0
+   }
+  },
+  "astar (optimal)": {
+   "4": {
+    "kind": "symbolic",
+    "scenes": 300,
+    "valid": 300,
+    "p50_ms": 0.08687499212101102,
+    "p95_ms": 0.2164170000469312,
+    "max_ms": 0.8046669972827658,
+    "mean_moves": 3.81,
+    "moves_vs_optimal": 1.0,
+    "llm_calls_per_request": 0.0
+   },
+   "6": {
+    "kind": "symbolic",
+    "scenes": 300,
+    "valid": 300,
+    "p50_ms": 0.2572920056991279,
+    "p95_ms": 1.479667000239715,
+    "max_ms": 8.614207996288314,
+    "mean_moves": 5.65,
+    "moves_vs_optimal": 1.0,
+    "llm_calls_per_request": 0.0
+   },
+   "8": {
+    "kind": "symbolic",
+    "scenes": 300,
+    "valid": 300,
+    "p50_ms": 0.5961670103715733,
+    "p95_ms": 8.306208008434623,
+    "max_ms": 107.50112500682008,
+    "mean_moves": 7.446666666666666,
+    "moves_vs_optimal": null,
+    "llm_calls_per_request": 0.0
+   }
+  },
+  "htn": {
+   "4": {
+    "kind": "symbolic",
+    "scenes": 300,
+    "valid": 293,
+    "p50_ms": 0.05066698940936476,
+    "p95_ms": 0.16224999853875488,
+    "max_ms": 0.4225409938953817,
+    "mean_moves": 3.795221843003413,
+    "moves_vs_optimal": 1.003811149032992,
+    "llm_calls_per_request": 0.0
+   },
+   "6": {
+    "kind": "symbolic",
+    "scenes": 300,
+    "valid": 290,
+    "p50_ms": 0.11649999942164868,
+    "p95_ms": 1.039499999023974,
+    "max_ms": 4.869583994150162,
+    "mean_moves": 5.672413793103448,
+    "moves_vs_optimal": 1.010328407224959,
+    "llm_calls_per_request": 0.0
+   },
+   "8": {
+    "kind": "symbolic",
+    "scenes": 300,
+    "valid": 290,
+    "p50_ms": 0.20908299484290183,
+    "p95_ms": 4.274749997421168,
+    "max_ms": 38.240042005782016,
+    "mean_moves": 7.427586206896552,
+    "moves_vs_optimal": null,
+    "llm_calls_per_request": 0.0
+   }
+  },
+  "pddl:pyperplan": {
+   "4": {
+    "kind": "symbolic",
+    "scenes": 30,
+    "valid": 30,
+    "p50_ms": 41.19216700200923,
+    "p95_ms": 76.77841700206045,
+    "max_ms": 80.9065829962492,
+    "mean_moves": 4.2,
+    "moves_vs_optimal": 1.0986507936507937,
+    "llm_calls_per_request": 0.0
+   },
+   "6": {
+    "kind": "symbolic",
+    "scenes": 30,
+    "valid": 30,
+    "p50_ms": 108.8955419982085,
+    "p95_ms": 330.3292079945095,
+    "max_ms": 2316.3722080062144,
+    "mean_moves": 6.766666666666667,
+    "moves_vs_optimal": 1.1626984126984126,
+    "llm_calls_per_request": 0.0
+   },
+   "8": {
+    "kind": "symbolic",
+    "scenes": 12,
+    "valid": 12,
+    "p50_ms": 222.10029099369422,
+    "p95_ms": 2258.619708009064,
+    "max_ms": 2258.619708009064,
+    "mean_moves": 9.083333333333334,
+    "moves_vs_optimal": null,
+    "llm_calls_per_request": 0.0
+   }
+  },
+  "pddl:fast-downward": {
+   "4": {
+    "kind": "symbolic",
+    "scenes": 25,
+    "valid": 25,
+    "p50_ms": 133.67120899783913,
+    "p95_ms": 165.11779199936427,
+    "max_ms": 166.72933399968315,
+    "mean_moves": 3.92,
+    "moves_vs_optimal": 1.0137142857142856,
+    "llm_calls_per_request": 0.0
+   },
+   "6": {
+    "kind": "symbolic",
+    "scenes": 25,
+    "valid": 25,
+    "p50_ms": 152.38066599704325,
+    "p95_ms": 178.12579200835899,
+    "max_ms": 181.47141599911265,
+    "mean_moves": 6.6,
+    "moves_vs_optimal": 1.1343333333333334,
+    "llm_calls_per_request": 0.0
+   },
+   "8": {
+    "kind": "symbolic",
+    "scenes": 25,
+    "valid": 25,
+    "p50_ms": 178.61450000782497,
+    "p95_ms": 210.178541005007,
+    "max_ms": 288.2708749966696,
+    "mean_moves": 10.4,
+    "moves_vs_optimal": null,
+    "llm_calls_per_request": 0.0
+   }
+  },
+  "case_based": {
+   "4": {
+    "kind": "symbolic + memory",
+    "scenes": 300,
+    "valid": 300,
+    "p50_ms": 0.04516700573731214,
+    "p95_ms": 0.05950000195298344,
+    "max_ms": 0.2010000025620684,
+    "mean_moves": 3.83,
+    "moves_vs_optimal": 1.0041666666666667,
+    "llm_calls_per_request": 0.0,
+    "case_stats": {
+     "hit": 10,
+     "miss": 290,
+     "rejected": 0,
+     "stored": 290,
+     "known_infeasible": 0
+    }
+   },
+   "6": {
+    "kind": "symbolic + memory",
+    "scenes": 300,
+    "valid": 300,
+    "p50_ms": 0.0677920033922419,
+    "p95_ms": 0.08645799243822694,
+    "max_ms": 0.7602910045534372,
+    "mean_moves": 5.706666666666667,
+    "moves_vs_optimal": 1.009,
+    "llm_calls_per_request": 0.0,
+    "case_stats": {
+     "hit": 1,
+     "miss": 299,
+     "rejected": 0,
+     "stored": 297,
+     "known_infeasible": 0
+    }
+   },
+   "8": {
+    "kind": "symbolic + memory",
+    "scenes": 300,
+    "valid": 300,
+    "p50_ms": 0.0914169941097498,
+    "p95_ms": 0.12729200534522533,
+    "max_ms": 32.3768330126768,
+    "mean_moves": 7.516666666666667,
+    "moves_vs_optimal": null,
+    "llm_calls_per_request": 0.0,
+    "case_stats": {
+     "hit": 0,
+     "miss": 300,
+     "rejected": 0,
+     "stored": 300,
+     "known_infeasible": 0
+    }
+   }
+  },
+  "llm_program": {
+   "4": {
+    "kind": "generated code (mock model)",
+    "scenes": 300,
+    "valid": 285,
+    "p50_ms": 0.03616699541453272,
+    "p95_ms": 0.055374999647028744,
+    "max_ms": 0.09249999129679054,
+    "mean_moves": 3.807017543859649,
+    "moves_vs_optimal": 1.013859649122807,
+    "llm_calls_per_request": 0.0
+   },
+   "6": {
+    "kind": "generated code (mock model)",
+    "scenes": 300,
+    "valid": 268,
+    "p50_ms": 0.06741599645465612,
+    "p95_ms": 0.09866700565908104,
+    "max_ms": 0.17345898959320039,
+    "mean_moves": 5.58955223880597,
+    "moves_vs_optimal": 1.011265103056148,
+    "llm_calls_per_request": 0.0
+   },
+   "8": {
+    "kind": "generated code (mock model)",
+    "scenes": 300,
+    "valid": 263,
+    "p50_ms": 0.10241700510960072,
+    "p95_ms": 0.14970799384173006,
+    "max_ms": 0.20154200319666415,
+    "mean_moves": 7.376425855513308,
+    "moves_vs_optimal": null,
+    "llm_calls_per_request": 0.0
+   }
+  },
+  "llm_heuristic": {
+   "4": {
+    "kind": "generated code (mock model)",
+    "scenes": 300,
+    "valid": 300,
+    "p50_ms": 0.21054199896752834,
+    "p95_ms": 0.7934169989312068,
+    "max_ms": 2.9752499976893887,
+    "mean_moves": 3.9433333333333334,
+    "moves_vs_optimal": 1.0308333333333333,
+    "llm_calls_per_request": 0.0
+   },
+   "6": {
+    "kind": "generated code (mock model)",
+    "scenes": 300,
+    "valid": 300,
+    "p50_ms": 0.702000004821457,
+    "p95_ms": 4.6906250063329935,
+    "max_ms": 44.952917000046,
+    "mean_moves": 5.973333333333334,
+    "moves_vs_optimal": 1.0527658730158729,
+    "llm_calls_per_request": 0.0
+   },
+   "8": {
+    "kind": "generated code (mock model)",
+    "scenes": 300,
+    "valid": 300,
+    "p50_ms": 1.6753329982748255,
+    "p95_ms": 53.5611249943031,
+    "max_ms": 397.74433300772216,
+    "mean_moves": 7.973333333333334,
+    "moves_vs_optimal": null,
+    "llm_calls_per_request": 0.0
+   }
+  },
+  "learned": {
+   "4": {
+    "kind": "trained ranker",
+    "scenes": 300,
+    "valid": 267,
+    "p50_ms": 0.11974999506492168,
+    "p95_ms": 0.17429199942853302,
+    "max_ms": 0.20899999071843922,
+    "mean_moves": 3.6853932584269664,
+    "moves_vs_optimal": 1.0016853932584269,
+    "llm_calls_per_request": 0.0
+   },
+   "6": {
+    "kind": "trained ranker",
+    "scenes": 300,
+    "valid": 251,
+    "p50_ms": 0.2849580050678924,
+    "p95_ms": 0.41533300827722996,
+    "max_ms": 0.5030839965911582,
+    "mean_moves": 5.4541832669322705,
+    "moves_vs_optimal": 1.0,
+    "llm_calls_per_request": 0.0
+   },
+   "8": {
+    "kind": "trained ranker",
+    "scenes": 300,
+    "valid": 253,
+    "p50_ms": 0.5229169910307974,
+    "p95_ms": 0.7885420054662973,
+    "max_ms": 1.0530830040806904,
+    "mean_moves": 7.24505928853755,
+    "moves_vs_optimal": null,
+    "llm_calls_per_request": 0.0
+   }
+  },
+  "learned+symbolic": {
+   "4": {
+    "kind": "trained ranker + fallback",
+    "scenes": 300,
+    "valid": 300,
+    "p50_ms": 0.12162499479018152,
+    "p95_ms": 0.17987500177696347,
+    "max_ms": 0.21512499370146543,
+    "mean_moves": 3.8333333333333335,
+    "moves_vs_optimal": 1.005,
+    "llm_calls_per_request": 0.0,
+    "fallback_used": 33
+   },
+   "6": {
+    "kind": "trained ranker + fallback",
+    "scenes": 300,
+    "valid": 300,
+    "p50_ms": 0.29591699421871454,
+    "p95_ms": 0.42541700531728566,
+    "max_ms": 0.8347080001840368,
+    "mean_moves": 5.69,
+    "moves_vs_optimal": 1.006111111111111,
+    "llm_calls_per_request": 0.0,
+    "fallback_used": 49
+   },
+   "8": {
+    "kind": "trained ranker + fallback",
+    "scenes": 300,
+    "valid": 300,
+    "p50_ms": 0.5280829936964437,
+    "p95_ms": 0.7988329889485613,
+    "max_ms": 1.8353330087848008,
+    "mean_moves": 7.5,
+    "moves_vs_optimal": null,
+    "llm_calls_per_request": 0.0,
+    "fallback_used": 47
+   }
+  },
+  "adaptive": {
+   "4": {
+    "kind": "rule-based router",
+    "scenes": 300,
+    "valid": 300,
+    "p50_ms": 0.04691600042860955,
+    "p95_ms": 0.058457997511141,
+    "max_ms": 0.17250000382773578,
+    "mean_moves": 3.83,
+    "moves_vs_optimal": 1.0041666666666667,
+    "llm_calls_per_request": 0.0
+   },
+   "6": {
+    "kind": "rule-based router",
+    "scenes": 300,
+    "valid": 300,
+    "p50_ms": 0.06945899804122746,
+    "p95_ms": 0.09054200199898332,
+    "max_ms": 0.8062080014497042,
+    "mean_moves": 5.706666666666667,
+    "moves_vs_optimal": 1.009,
+    "llm_calls_per_request": 0.0
+   },
+   "8": {
+    "kind": "rule-based router",
+    "scenes": 300,
+    "valid": 300,
+    "p50_ms": 0.09416599641554058,
+    "p95_ms": 0.12879200221505016,
+    "max_ms": 1.898250004160218,
+    "mean_moves": 7.516666666666667,
+    "moves_vs_optimal": null,
+    "llm_calls_per_request": 0.0
+   }
+  },
+  "llm_direct": {
+   "4": {
+    "kind": "mock model",
+    "scenes": 300,
+    "valid": 203,
+    "p50_ms": 0.06874999962747097,
+    "p95_ms": 0.08312499267049134,
+    "max_ms": 0.2760839997790754,
+    "mean_moves": 3.8669950738916254,
+    "moves_vs_optimal": 1.0029556650246305,
+    "llm_calls_per_request": 1.0
+   },
+   "6": {
+    "kind": "mock model",
+    "scenes": 300,
+    "valid": 203,
+    "p50_ms": 0.0940000027185306,
+    "p95_ms": 0.11533299402799457,
+    "max_ms": 0.8850419981172308,
+    "mean_moves": 5.724137931034483,
+    "moves_vs_optimal": 1.0100164203612478,
+    "llm_calls_per_request": 1.0
+   },
+   "8": {
+    "kind": "mock model",
+    "scenes": 300,
+    "valid": 203,
+    "p50_ms": 0.12104200141038746,
+    "p95_ms": 0.15370899927802384,
+    "max_ms": 1.759999999194406,
+    "mean_moves": 7.448275862068965,
+    "moves_vs_optimal": null,
+    "llm_calls_per_request": 1.0
+   }
+  },
+  "llm_modulo": {
+   "4": {
+    "kind": "mock model",
+    "scenes": 300,
+    "valid": 300,
+    "p50_ms": 0.08312500722240657,
+    "p95_ms": 0.17433299217373133,
+    "max_ms": 0.20058300287928432,
+    "mean_moves": 3.83,
+    "moves_vs_optimal": 1.0041666666666667,
+    "llm_calls_per_request": 1.3233333333333333
+   },
+   "6": {
+    "kind": "mock model",
+    "scenes": 300,
+    "valid": 300,
+    "p50_ms": 0.11741700291167945,
+    "p95_ms": 0.2346660039620474,
+    "max_ms": 0.8019169908948243,
+    "mean_moves": 5.706666666666667,
+    "moves_vs_optimal": 1.009,
+    "llm_calls_per_request": 1.3233333333333333
+   },
+   "8": {
+    "kind": "mock model",
+    "scenes": 300,
+    "valid": 300,
+    "p50_ms": 0.14504100545309484,
+    "p95_ms": 0.3076659922953695,
+    "max_ms": 1.756458994350396,
+    "mean_moves": 7.516666666666667,
+    "moves_vs_optimal": null,
+    "llm_calls_per_request": 1.3233333333333333
+   }
+  }
+ },
+ "replanning": [
+  {
+   "method": "full_replan",
+   "cases": 400,
+   "failed": 0,
+   "kept": 0,
+   "p50_ms": 0.03908299549948424,
+   "p95_ms": 0.07154099876061082,
+   "mean_moves": 3.3775,
+   "mean_reused": 2.6025
+  },
+  {
+   "method": "validate_then_replan",
+   "cases": 400,
+   "failed": 0,
+   "kept": 149,
+   "p50_ms": 0.03345799632370472,
+   "p95_ms": 0.07550000736955553,
+   "mean_moves": 3.4125,
+   "mean_reused": 2.73
+  },
+  {
+   "method": "prefix_repair",
+   "cases": 400,
+   "failed": 0,
+   "kept": 153,
+   "p50_ms": 0.034958997275680304,
+   "p95_ms": 0.06762499106116593,
+   "mean_moves": 3.65,
+   "mean_reused": 2.2575
+  }
+ ],
+ "closed_loop": {
+  "behavior_tree": {
+   "episodes": 200,
+   "goal": 200,
+   "planner_calls_per_episode": 1.43,
+   "robot_steps_per_episode": 10.38
+  },
+  "receding_horizon": {
+   "episodes": 200,
+   "goal": 200,
+   "planner_calls_per_episode": 6.07,
+   "robot_steps_per_episode": 9.575
+  }
+ }
+}

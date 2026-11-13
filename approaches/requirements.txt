@@ -1,0 +1,15 @@
+numpy
+unified-planning>=1.3
+up-fast-downward
+up-pyperplan
+fastapi
+uvicorn
+httpx
+pytest
+# only for docs/make_guide.py
+matplotlib
+reportlab
+ortools
+pyyaml
+# only for approaches/gnn_policy.py
+torch

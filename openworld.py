@@ -77,6 +77,7 @@ def normalize_scene(raw: dict) -> dict:
     if not isinstance(raw, dict):
         raise SceneError('scene must be a JSON object')
     warnings, names = [], Names()
+    inline_support: dict = {}
     used: set[str] = set()
 
     def unique(base: str) -> str:
@@ -103,12 +104,15 @@ def normalize_scene(raw: dict) -> dict:
             d['height_mm'] = float(h)
         items[pid] = d
         names.add(pid, o.get('id'), label)
+        sup = next((o[k] for k in ('on', 'on_top_of', 'rests_on', 'in') if isinstance(o.get(k), str)), None)
+        if sup is not None:                          # per-object form: {"id": ..., "on": "yellow_block"}
+            inline_support[o.get('id') or pid] = sup
     if not items:
         raise SceneError('scene has no objects')
 
     # ---- places
     places: dict[str, dict] = {}
-    pl = raw.get('places') or []
+    pl = raw.get('places') or raw.get('zones') or raw.get('destinations') or []
     if isinstance(pl, dict):
         pl = [{'id': k, **(v if isinstance(v, dict) else {})} for k, v in pl.items()]
     for p in pl:
@@ -130,6 +134,12 @@ def normalize_scene(raw: dict) -> dict:
 
     # ---- support
     sup_raw = raw.get('support') or {}
+    if isinstance(sup_raw, dict):
+        sup_raw = {**inline_support, **sup_raw}      # an explicit support map wins
+    for r in raw.get('relations') or []:             # [{"subject": a, "relation": "on", "object": b}]
+        if isinstance(r, dict) and str(r.get('relation', r.get('type', 'on'))).lower() in ('on', 'on_top_of'):
+            if isinstance(sup_raw, dict):
+                sup_raw.setdefault(r.get('subject'), r.get('object'))
     if isinstance(sup_raw, list):                    # [{"object": x, "on": y}] form
         sup_raw = {s.get('object'): s.get('on', s.get('in')) for s in sup_raw if isinstance(s, dict)}
     support, unknown = {}, []

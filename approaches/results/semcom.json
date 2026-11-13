@@ -1,0 +1,139 @@
+{
+ "meta": {
+  "system": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "date": "2026-11-13",
+  "cases": 600
+ },
+ "levels": {
+  "json_full": {
+   "cases": 600,
+   "mean_bytes": 1440.7183333333332,
+   "mean_gzip_bytes": 487.095,
+   "identical": 600,
+   "equivalent": 0,
+   "valid_longer": 0,
+   "failed": 0,
+   "objects_sent_fraction": 1.0,
+   "second_round": 0,
+   "plan_p50_ms": 0.10266699246130884
+  },
+  "json_min": {
+   "cases": 600,
+   "mean_bytes": 857.7516666666667,
+   "mean_gzip_bytes": 295.53,
+   "identical": 600,
+   "equivalent": 0,
+   "valid_longer": 0,
+   "failed": 0,
+   "objects_sent_fraction": 1.0,
+   "second_round": 0,
+   "plan_p50_ms": 0.09712499740999192
+  },
+  "packed": {
+   "cases": 600,
+   "mean_bytes": 55.641666666666666,
+   "mean_gzip_bytes": 76.06833333333333,
+   "identical": 600,
+   "equivalent": 0,
+   "valid_longer": 0,
+   "failed": 0,
+   "objects_sent_fraction": 1.0,
+   "second_round": 0,
+   "plan_p50_ms": 0.1045420067384839
+  },
+  "task_relevant": {
+   "cases": 600,
+   "mean_bytes": 805.15,
+   "mean_gzip_bytes": 286.80333333333334,
+   "identical": 597,
+   "equivalent": 3,
+   "valid_longer": 0,
+   "failed": 0,
+   "objects_sent_fraction": 0.867369708994709,
+   "second_round": 2,
+   "plan_p50_ms": 0.08254199929069728
+  }
+ },
+ "images": {
+  "original": {
+   "files": 12,
+   "mean_bytes": 248220.25
+  },
+  "1024px q85": {
+   "files": 12,
+   "mean_bytes": 131628.91666666666
+  },
+  "768px q75": {
+   "files": 12,
+   "mean_bytes": 57110.833333333336
+  },
+  "512px q70": {
+   "files": 12,
+   "mean_bytes": 27601.083333333332
+  },
+  "384px q60": {
+   "files": 12,
+   "mean_bytes": 15599.416666666666
+  },
+  "256px q50": {
+   "files": 12,
+   "mean_bytes": 7838.833333333333
+  }
+ },
+ "real_scenes": [
+  {
+   "scene": "s1_flat",
+   "json_min_bytes": 526,
+   "packed_bytes": 29,
+   "plan_moves": 5
+  },
+  {
+   "scene": "s2_flat",
+   "json_min_bytes": 526,
+   "packed_bytes": 29,
+   "plan_moves": 5
+  },
+  {
+   "scene": "s3_flat",
+   "json_min_bytes": 526,
+   "packed_bytes": 29,
+   "plan_moves": 5
+  },
+  {
+   "scene": "s4_flat",
+   "json_min_bytes": 526,
+   "packed_bytes": 29,
+   "plan_moves": 5
+  },
+  {
+   "scene": "s1_build",
+   "json_min_bytes": 566,
+   "packed_bytes": 29,
+   "plan_moves": 5
+  },
+  {
+   "scene": "s2_build",
+   "json_min_bytes": 566,
+   "packed_bytes": 29,
+   "plan_moves": 5
+  },
+  {
+   "scene": "s3_build",
+   "json_min_bytes": 567,
+   "packed_bytes": 29,
+   "plan_moves": 5
+  },
+  {
+   "scene": "s4_build",
+   "json_min_bytes": 547,
+   "packed_bytes": 29,
+   "plan_moves": 5
+  },
+  {
+   "scene": "s5_reorder",
+   "json_min_bytes": 519,
+   "packed_bytes": 25,
+   "plan_moves": 4
+  }
+ ]
+}

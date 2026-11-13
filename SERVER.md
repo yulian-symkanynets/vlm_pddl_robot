@@ -91,4 +91,6 @@ $ printf '[network]\ngenerateResolvConf = false\n' | sudo tee /etc/wsl.conf     
 | Browser shows another app (VisionQ, ...) | port taken: `PORT=8020 ./serve.sh restart qwen3-vl-8b 4bit` |
 | Works on the PC, not from the laptop | run the port forwarding script (as admin); after restart again |
 | `./serve.sh start` says "server exited" | `./serve.sh logs`: missing package -> `pip install -r requirements.txt` |
+| `no kernel image is available` / `sm_120 is not compatible` (RTX 50xx) | torch too old for the GPU: `pip uninstall -y torch torchvision && pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128` |
+| `ensurepip is not available` in `./setup.sh` | `sudo apt update && sudo apt install -y python3-venv python3-pip`, then `rm -rf .venv && ./setup.sh` |
 | Very slow / out of memory | smaller model: `./serve.sh restart qwen3-vl-4b 4bit` |

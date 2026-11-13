@@ -2,13 +2,23 @@
 # Create .venv and install everything.
 #   ./setup.sh            GPU machine (Linux + NVIDIA): torch with CUDA + VLM libraries + planners
 #   ./setup.sh --cpu      Mac / no GPU: only planners and validation (benchmark with --models mock)
-# Change CUDA_INDEX if your driver needs another CUDA build (check `nvidia-smi`, top right).
+# The CUDA build of torch is chosen from the GPU; override with CUDA_INDEX=... ./setup.sh
 set -euo pipefail
 cd "$(dirname "$0")"
-CUDA_INDEX=${CUDA_INDEX:-https://download.pytorch.org/whl/cu124}
+# PyTorch build: RTX 50xx (Blackwell, compute capability 10+/12+) needs CUDA 12.8 builds,
+# older GPUs (RTX 30xx/40xx, A4500, ...) work with cu124 and older drivers.
+if [[ -z "${CUDA_INDEX:-}" ]]; then
+  CAP=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -n1 | cut -d. -f1 || true)
+  if [[ -n "$CAP" && "$CAP" -ge 10 ]]; then CUDA_INDEX=https://download.pytorch.org/whl/cu128
+  else CUDA_INDEX=https://download.pytorch.org/whl/cu124; fi
+fi
+echo "PyTorch from: $CUDA_INDEX"
 PY=${PYTHON:-python3}
 
-$PY -m venv .venv
+if ! $PY -c 'import ensurepip' 2>/dev/null; then
+  echo "python venv support missing. Run:  sudo apt update && sudo apt install -y python3-venv python3-pip"; exit 1
+fi
+[[ -x .venv/bin/pip ]] || { rm -rf .venv; $PY -m venv .venv; }
 .venv/bin/pip install -U pip
 
 if [[ "${1:-}" == "--cpu" ]]; then

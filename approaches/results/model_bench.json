@@ -1,0 +1,112 @@
+{
+ "meta": {
+  "system": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "date": "2026-11-13",
+  "cases": 300,
+  "seed": 7
+ },
+ "configs": {
+  "rules (no model)": {
+   "cases": 300,
+   "understood": 0.8066666666666666,
+   "task_correct": 0.8066666666666666,
+   "plan_success": 0.8066666666666666,
+   "clarify": 0.19333333333333333,
+   "llm_calls_per_task": 0.0,
+   "p50_ms": 0.18104200717061758,
+   "p95_ms": 2.5556670007063076,
+   "understood_by": {
+    "none": 58,
+    "rules": 242
+   },
+   "success_by_kind": {
+    "on": "28/28",
+    "on_no_table": "25/25",
+    "paraphrase": "0/27",
+    "slovak": "0/31",
+    "sort": "25/25",
+    "sort_keep": "22/22",
+    "sort_never_on": "37/37",
+    "stack_list": "38/38",
+    "tower_words": "25/25",
+    "zone": "42/42"
+   }
+  },
+  "mock model, hybrid": {
+   "cases": 300,
+   "understood": 1.0,
+   "task_correct": 1.0,
+   "plan_success": 1.0,
+   "clarify": 0.0,
+   "llm_calls_per_task": 1.13,
+   "p50_ms": 0.28316699899733067,
+   "p95_ms": 2.5750829954631627,
+   "understood_by": {
+    "llm": 300
+   },
+   "success_by_kind": {
+    "on": "28/28",
+    "on_no_table": "25/25",
+    "paraphrase": "27/27",
+    "slovak": "31/31",
+    "sort": "25/25",
+    "sort_keep": "22/22",
+    "sort_never_on": "37/37",
+    "stack_list": "38/38",
+    "tower_words": "25/25",
+    "zone": "42/42"
+   }
+  },
+  "rules then mock model": {
+   "cases": 300,
+   "understood": 1.0,
+   "task_correct": 1.0,
+   "plan_success": 1.0,
+   "clarify": 0.0,
+   "llm_calls_per_task": 0.21,
+   "p50_ms": 0.26770900876726955,
+   "p95_ms": 2.514417006750591,
+   "understood_by": {
+    "llm": 58,
+    "rules": 242
+   },
+   "success_by_kind": {
+    "on": "28/28",
+    "on_no_table": "25/25",
+    "paraphrase": "27/27",
+    "slovak": "31/31",
+    "sort": "25/25",
+    "sort_keep": "22/22",
+    "sort_never_on": "37/37",
+    "stack_list": "38/38",
+    "tower_words": "25/25",
+    "zone": "42/42"
+   }
+  },
+  "mock model, vlm_plan": {
+   "cases": 300,
+   "understood": 1.0,
+   "task_correct": 1.0,
+   "plan_success": 1.0,
+   "clarify": 0.0,
+   "llm_calls_per_task": 2.13,
+   "p50_ms": 0.332291005179286,
+   "p95_ms": 2.5895419967127964,
+   "understood_by": {
+    "llm": 300
+   },
+   "success_by_kind": {
+    "on": "28/28",
+    "on_no_table": "25/25",
+    "paraphrase": "27/27",
+    "slovak": "31/31",
+    "sort": "25/25",
+    "sort_keep": "22/22",
+    "sort_never_on": "37/37",
+    "stack_list": "38/38",
+    "tower_words": "25/25",
+    "zone": "42/42"
+   }
+  }
+ }
+}

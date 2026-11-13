@@ -25,8 +25,17 @@ try:
         free, total = torch.cuda.mem_get_info()
         show('CUDA', True, f'{torch.cuda.get_device_name(0)}, {free / 2**30:.1f}/{total / 2**30:.1f} GB free, '
                            f'CUDA {torch.version.cuda}, bf16={torch.cuda.is_bf16_supported()}')
-        x = torch.ones(3, device='cuda')
-        show('CUDA compute', (x + x).sum().item() == 6)
+        major, minor = torch.cuda.get_device_capability(0)
+        arch = f'sm_{major}{minor}'
+        built = torch.cuda.get_arch_list()
+        if arch not in built and f'compute_{major}{minor}' not in built:
+            show('torch build supports this GPU', False,
+                 f'GPU is {arch}, this torch only has {" ".join(built)}.\n'
+                 f'      Fix: pip uninstall -y torch torchvision && pip install torch torchvision '
+                 f'--index-url https://download.pytorch.org/whl/cu128')
+        else:
+            x = torch.ones(3, device='cuda')
+            show('CUDA compute', (x + x).sum().item() == 6, arch)
     else:
         show('CUDA', False, 'not available -> only "--models mock" and validate_pddl.py will work')
 except ImportError:

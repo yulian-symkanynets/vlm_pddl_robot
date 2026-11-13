@@ -1,0 +1,149 @@
+{
+ "meta": {
+  "system": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "torch": "2.15.0",
+  "date": "2026-11-13"
+ },
+ "by_training_size": {
+  "500": {
+   "train_states": 2141,
+   "gnn_top1": 0.798225128444652,
+   "linear_top1": 0.7762727697337692,
+   "parameters": 40033,
+   "data_s": 0.2868596250045812,
+   "train_s": 24.444698541992693,
+   "eval": {
+    "3-6 objects (as in training)": {
+     "graph planner": {
+      "valid": 300,
+      "of": 300,
+      "p50_ms": 0.027582995244301856,
+      "p95_ms": 0.045832988689653575,
+      "moves_vs_graph_planner": 1.0
+     },
+     "linear ranker": {
+      "valid": 276,
+      "of": 300,
+      "p50_ms": 0.14654100232291967,
+      "p95_ms": 0.33387499570380896,
+      "moves_vs_graph_planner": 1.0
+     },
+     "GNN": {
+      "valid": 297,
+      "of": 300,
+      "p50_ms": 0.6575000006705523,
+      "p95_ms": 1.204625004902482,
+      "moves_vs_graph_planner": 1.0155482815057284
+     },
+     "GNN + symbolic fallback": {
+      "valid": 300,
+      "of": 300,
+      "p50_ms": 0.6546670047100633,
+      "p95_ms": 1.1950000043725595,
+      "moves_vs_graph_planner": 1.0152979066022545
+     }
+    },
+    "7-10 objects (larger than training)": {
+     "graph planner": {
+      "valid": 300,
+      "of": 300,
+      "p50_ms": 0.06874999962747097,
+      "p95_ms": 0.09395800589118153,
+      "moves_vs_graph_planner": 1.0
+     },
+     "linear ranker": {
+      "valid": 275,
+      "of": 300,
+      "p50_ms": 0.6510410021292046,
+      "p95_ms": 1.3723330048378557,
+      "moves_vs_graph_planner": 0.999074502545118
+     },
+     "GNN": {
+      "valid": 295,
+      "of": 300,
+      "p50_ms": 1.8892079970100895,
+      "p95_ms": 2.614375000121072,
+      "moves_vs_graph_planner": 1.0310374149659864
+     },
+     "GNN + symbolic fallback": {
+      "valid": 300,
+      "of": 300,
+      "p50_ms": 1.8767910078167915,
+      "p95_ms": 2.6155830128118396,
+      "moves_vs_graph_planner": 1.0304801670146138
+     }
+    }
+   }
+  },
+  "2000": {
+   "train_states": 8544,
+   "gnn_top1": 0.8824906367041199,
+   "linear_top1": 0.7771535580524345,
+   "parameters": 40033,
+   "data_s": 1.0926955829927465,
+   "train_s": 81.89103162501124,
+   "eval": {
+    "3-6 objects (as in training)": {
+     "graph planner": {
+      "valid": 300,
+      "of": 300,
+      "p50_ms": 0.028541995561681688,
+      "p95_ms": 0.046250002924352884,
+      "moves_vs_graph_planner": 1.0
+     },
+     "linear ranker": {
+      "valid": 276,
+      "of": 300,
+      "p50_ms": 0.15208299737423658,
+      "p95_ms": 0.3628330014180392,
+      "moves_vs_graph_planner": 1.0
+     },
+     "GNN": {
+      "valid": 298,
+      "of": 300,
+      "p50_ms": 0.6688330031465739,
+      "p95_ms": 1.207707988214679,
+      "moves_vs_graph_planner": 1.0121951219512195
+     },
+     "GNN + symbolic fallback": {
+      "valid": 300,
+      "of": 300,
+      "p50_ms": 0.6746250001015142,
+      "p95_ms": 1.198541998746805,
+      "moves_vs_graph_planner": 1.0120772946859904
+     }
+    },
+    "7-10 objects (larger than training)": {
+     "graph planner": {
+      "valid": 300,
+      "of": 300,
+      "p50_ms": 0.0703330006217584,
+      "p95_ms": 0.09462499292567372,
+      "moves_vs_graph_planner": 1.0
+     },
+     "linear ranker": {
+      "valid": 275,
+      "of": 300,
+      "p50_ms": 0.6613750010728836,
+      "p95_ms": 1.3993750035297126,
+      "moves_vs_graph_planner": 0.999074502545118
+     },
+     "GNN": {
+      "valid": 299,
+      "of": 300,
+      "p50_ms": 1.8858340044971555,
+      "p95_ms": 3.5237080010119826,
+      "moves_vs_graph_planner": 1.0268231349538977
+     },
+     "GNN + symbolic fallback": {
+      "valid": 300,
+      "of": 300,
+      "p50_ms": 2.264124996145256,
+      "p95_ms": 4.851208999752998,
+      "moves_vs_graph_planner": 1.026722338204593
+     }
+    }
+   }
+  }
+ }
+}

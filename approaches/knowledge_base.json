@@ -1,0 +1,213 @@
+{
+ "version": "1",
+ "operations": [
+  {
+   "name": "PICK",
+   "params": [
+    "object",
+    "from"
+   ],
+   "does": "grasp an object",
+   "requires": [
+    "nothing is on top of the object",
+    "the gripper is empty",
+    "the object's pose is verified and reachable",
+    "no collision risk is reported for the object"
+   ],
+   "result": [
+    "the gripper holds the object"
+   ]
+  },
+  {
+   "name": "PLACE",
+   "params": [
+    "object",
+    "destination",
+    "destination_kind"
+   ],
+   "does": "put the held object on a zone or on another object",
+   "requires": [
+    "the gripper holds the object",
+    "destination is a zone with a free ground pose, or an object with a flat top and nothing on it"
+   ],
+   "result": [
+    "the object rests on the destination",
+    "the gripper is empty"
+   ]
+  },
+  {
+   "name": "MOVE_TO_TEMPORARY_LOCATION",
+   "params": [
+    "object",
+    "destination",
+    "destination_kind"
+   ],
+   "does": "put the held object on a free temporary slot",
+   "requires": [
+    "the gripper holds the object",
+    "the slot is free"
+   ],
+   "result": [
+    "the object rests on the slot",
+    "the gripper is empty"
+   ]
+  },
+  {
+   "name": "REQUEST_NEW_VIEW",
+   "params": [
+    "target"
+   ],
+   "does": "take an image with the external camera and re-identify the target",
+   "requires": [],
+   "result": [
+    "a new scene message"
+   ]
+  },
+  {
+   "name": "CHANGE_VIEWPOINT",
+   "params": [
+    "target"
+   ],
+   "does": "move the wrist camera to see an occluded target",
+   "requires": [
+    "the gripper is empty"
+   ],
+   "result": [
+    "a new scene message"
+   ]
+  },
+  {
+   "name": "VERIFY_SCENE",
+   "params": [
+    "target"
+   ],
+   "does": "observe again and send the full scene",
+   "requires": [],
+   "result": [
+    "a new scene message"
+   ]
+  },
+  {
+   "name": "RETRY_ACTION",
+   "params": [
+    "retry_of"
+   ],
+   "does": "repeat the step that just failed",
+   "requires": [],
+   "result": [
+    "as the repeated step"
+   ]
+  }
+ ],
+ "rules": [
+  "One object is moved at a time.",
+  "Only an object with nothing on top of it can be picked.",
+  "Nothing can be placed on a prism.",
+  "Temporary placements use the free slots the laptop reports, or free table space (destination 'table') when the scene allows it.",
+  "A zone holds as many stacks as its capacity; a free slot holds one object.",
+  "An object stacked on something inside a zone counts as being in that zone.",
+  "Objects that are unidentified, unreachable or have an unverified pose are not moved, and nothing below them is moved."
+ ],
+ "goal_vocabulary": [
+  {
+   "form": {
+    "sort_by_color": true
+   },
+   "meaning": "every object ends in the zone of its own colour"
+  },
+  {
+   "form": {
+    "object": "<id>",
+    "in": "<zone id>"
+   },
+   "meaning": "the object ends in that zone (on its floor or stacked inside it)"
+  },
+  {
+   "form": {
+    "object": "<id>",
+    "on": "<object id>"
+   },
+   "meaning": "the object rests directly on top of the other object"
+  },
+  {
+   "form": {
+    "object": "<id>",
+    "on": "table"
+   },
+   "meaning": "the object stands alone on a free slot"
+  },
+  {
+   "form": {
+    "object": "<id>",
+    "clear": true
+   },
+   "meaning": "nothing is on the object"
+  },
+  {
+   "form": {
+    "stack": [
+     "<bottom id>",
+     "...",
+     "<top id>"
+    ],
+    "in": "<zone id, optional>"
+   },
+   "meaning": "a tower in this order, BOTTOM FIRST ('red on blue' is [blue, red]); for simple pairs prefer the 'on' form"
+  },
+  {
+   "form": {
+    "object": "<id>",
+    "not_on": "<object id>"
+   },
+   "meaning": "the object must no longer rest directly on that object (\"take a off b\")"
+  },
+  {
+   "form": {
+    "reverse": "<id of any object in the stack, or 'all'>"
+   },
+   "meaning": "turn that stack upside down (reverse, flip, invert); the server computes the result from the current arrangement"
+  },
+  {
+   "form": {
+    "swap": [
+     "<id>",
+     "<id>"
+    ]
+   },
+   "meaning": "the two objects change places (swap, exchange, switch); the server computes the result"
+  }
+ ],
+ "constraint_vocabulary": [
+  {
+   "form": {
+    "no_temporary": true
+   },
+   "meaning": "do not park objects on free slots / on the table"
+  },
+  {
+   "form": {
+    "keep": [
+     "<id>"
+    ]
+   },
+   "meaning": "these objects must not be moved"
+  },
+  {
+   "form": {
+    "never_on": [
+     [
+      "<object id or *>",
+      "<object id, zone id, slot id, or one of: slot, zone, object>"
+     ]
+    ]
+   },
+   "meaning": "never place the first on the second, not even temporarily"
+  },
+  {
+   "form": {
+    "max_stack_height": 2
+   },
+   "meaning": "no stack may get higher than this many objects"
+  }
+ ]
+}
