@@ -304,11 +304,16 @@ One entry per requirement:
   {{"object": "<id>", "on": "table"}}
 "object" is always the one that is moved or placed on top. A stack of three needs two entries
 (top on middle, middle on bottom). List only what the instruction requires.
+If the instruction also limits HOW it may be done, add "constraints" (only what the instruction says):
+  "no_table": true                       nothing may be put down on the table
+  "keep": ["<id>", ...]                  these objects must not be moved
+  "never_on": [["<id or *>", "<id, place id or table>"], ...]   never place the first on the second
+  "first": ["<id>"]                      this object is moved before anything else
 If the instruction mentions something that is not listed, is ambiguous, or cannot be written this way,
 return {{"goal": [], "question": "<short question for the user>"}}.
 
 Return only JSON:
-{{"goal": [ ... ]}}"""
+{{"goal": [ ... ], "constraints": {{ ... }}}}"""
 
 
 def _json_answer(text: str):
@@ -322,24 +327,41 @@ def _json_answer(text: str):
 
 
 # --------------------------------------------------------------------------- planner
-def plan_for(sc: dict, goal, planner: str = 'auto') -> dict:
-    """Scene + grounded goal -> PDDL problem -> plan -> verified on the same problem."""
+def plan_for(sc: dict, goal, planner: str = 'auto', constraints: dict | None = None) -> dict:
+    """Scene + grounded goal (+ the task's constraints) -> PDDL domain and problem for THIS
+    request -> plan -> verified on the same problem."""
+    import pddl_task
+    cons = constraints or {}
     ptext = make_problem('openworld', sc['env'], sc['items'], sc['support'], goal, sc['hidden'])
-    problem = parse_problem(ptext)
-    status, acts, dt, used = solve(problem, planner)
+    domain_pddl, domain_path = None, None
+    if pddl_task.needs_custom_domain(cons, sc):
+        domain_pddl = pddl_task.make_domain(cons, sc)
+        ptext = pddl_task.apply_to_problem(ptext, cons, sc)
+        domain_path = pddl_task.write_domain(domain_pddl)
+    try:
+        problem = parse_problem(ptext, domain_path) if domain_path else parse_problem(ptext)
+        status, acts, dt, used = solve(problem, planner)
+    finally:
+        if domain_path:
+            domain_path.unlink(missing_ok=True)
     out = {'problem_pddl': ptext, 'planner': used, 'planner_status': str(status), 'plan_s': round(dt, 3)}
+    if domain_pddl:
+        out['domain_pddl'] = domain_pddl
     if acts is None:
         return {**out, 'status': 'no_plan', 'message': explain_no_plan(sc, goal), 'plan': None}
     sim = simulate(problem, acts)
     return {**out, 'status': 'ok' if sim['ok'] else 'error',
             'message': None if sim['ok'] else f'plan failed verification: {sim["fail_reason"]}',
             'verified': sim['ok'],
-            'plan': [{'action': a, 'args': list(p), 'pddl': f'({a} {" ".join(p)})'} for a, p in acts]}
+            # helper actions of a per-request domain keep the robot's normal action names
+            'plan': [{'action': a.replace('pick-first-', 'pick-'), 'args': list(p),
+                      'pddl': f'({a.replace("pick-first-", "pick-")} {" ".join(p)})'} for a, p in acts]}
 
 
 # --------------------------------------------------------------------------- end to end
 def run(instruction: str | None = None, scene: dict | None = None, images=None, vlm=None,
-        goal=None, planner: str = 'auto', max_visual_tokens: int = 1024, sample: bool = False) -> dict:
+        goal=None, planner: str = 'auto', max_visual_tokens: int = 1024, sample: bool = False,
+        constraints: dict | None = None) -> dict:
     """The server's job. Give `scene` (semantic path) or `images` (+ vlm). `goal` skips the goal call."""
     t0 = time.perf_counter()
     res = {'status': 'error', 'message': None, 'instruction': instruction, 'timings': {}, 'model_answers': {}}
@@ -387,16 +409,26 @@ def run(instruction: str | None = None, scene: dict | None = None, images=None, 
             return done('error', f'goal: {err}')
         if isinstance(js, dict) and js.get('question') and not js.get('goal'):
             return done('clarify', js['question'])
+        if constraints is None and isinstance(js, dict) and isinstance(js.get('constraints'), dict):
+            constraints = js['constraints']      # what the sentence forbids, as the model read it
         goal = js.get('goal') if isinstance(js, dict) else js
     grounded, problem = resolve_goal(goal, sc)
     if problem:
         return done('clarify', problem, goal_raw=goal)
     res['goal'] = [{'object': g[1], 'on': 'table'} if g[0] == 'on-table'
                    else {'object': g[1], g[0]: g[2]} for g in grounded]
+    import pddl_task
+    cons, problems = pddl_task.normalize_constraints(constraints, sc)
+    if problems:
+        return done('clarify', '; '.join(problems), goal_raw=goal)
+    if cons.get('max_stack_height'):
+        res['warnings'] = res.get('warnings', []) + ['max_stack_height cannot be expressed in the PDDL path '
+                                                     '(use the task server); it was ignored']
+    res['constraints'] = {k: v for k, v in cons.items() if k != 'max_stack_height'}
 
     # 3) PDDL + planner + verification
     try:
-        p = plan_for(sc, grounded, planner)
+        p = plan_for(sc, grounded, planner, cons)
     except Exception as e:                       # noqa: BLE001  (report, do not crash the server)
         return done('error', f'planning: {type(e).__name__}: {e}')
     res['timings']['plan_s'] = p.pop('plan_s')
@@ -477,7 +509,9 @@ class RuleMock:
 
     def _goal(self, instruction: str, sc: dict) -> dict:
         goal = []
-        for part in re.split(r'\s*(?:,|;|\band\b|\bthen\b)\s*', instruction.lower()):
+        for part in re.split(r'\s*(?:,|;|\.\s|\bbut\b|\band\b|\bthen\b)\s*', instruction.lower()):
+            if re.search(r"\b(do not|don't|never|without|first|leave|keep)\b", part):
+                continue                                # a constraint, read below
             m = re.match(r'(?:please\s+)?(?:(?:put|place|move|stack|set)\s+)?(.+?)\s+'
                          r'(on top of|onto|on|into|inside|in|to)\s+(.+?)\.?$', part.strip())
             if not m:
@@ -495,7 +529,16 @@ class RuleMock:
         if not goal:
             return {'goal': [], 'question': 'The mock model only understands "put X on/in Y". '
                                             'Please rephrase (or use a real model).'}
-        return {'goal': goal}
+        cons, low = {}, instruction.lower()
+        if re.search(r"(do not|don't|never|without|no)\b[^.]*\b(table)\b", low):
+            cons['no_table'] = True
+        m = re.search(r"first (?:move |take |pick )?(?:up )?(?:the )?([a-z_ ]+?)(?:[.,]|$)", low)
+        if m and self._find(m.group(1), sc):
+            cons['first'] = [self._find(m.group(1), sc)]
+        m = re.search(r"(?:leave|keep) (?:the )?([a-z_ ]+?) (?:where it is|in place|alone)", low)
+        if m and self._find(m.group(1), sc):
+            cons['keep'] = [self._find(m.group(1), sc)]
+        return {'goal': goal, **({'constraints': cons} if cons else {})}
 
 
 def domain_text() -> str:

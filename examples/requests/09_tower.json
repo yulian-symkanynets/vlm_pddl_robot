@@ -1,0 +1,44 @@
+{
+  "scene": {
+    "objects": [
+      {
+        "id": "red_cylinder",
+        "color": "red",
+        "shape": "cylinder",
+        "on": "yellow_block"
+      },
+      {
+        "id": "yellow_block",
+        "color": "yellow",
+        "shape": "block",
+        "on": "table"
+      },
+      {
+        "id": "green_block",
+        "color": "green",
+        "shape": "block",
+        "on": "blue_cylinder"
+      },
+      {
+        "id": "blue_cylinder",
+        "color": "blue",
+        "shape": "cylinder",
+        "on": "table"
+      },
+      {
+        "id": "purple_cylinder",
+        "color": "purple",
+        "shape": "cylinder",
+        "on": "orange_block"
+      },
+      {
+        "id": "orange_block",
+        "color": "orange",
+        "shape": "block",
+        "on": "table"
+      }
+    ]
+  },
+  "instruction": "Build one tower: the orange block at the bottom, then the blue cylinder, then the red cylinder on top.",
+  "_expected": "goal: blue on orange, red on blue"
+}

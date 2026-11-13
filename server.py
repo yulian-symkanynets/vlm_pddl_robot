@@ -51,6 +51,8 @@ class PlanRequest(BaseModel):
     scene: dict | None = Field(None, description='scene abstraction (see openworld.py)')
     images_b64: list[str] | None = Field(None, description='fallback when no scene is sent')
     goal: list | None = Field(None, description='optional: skip the goal model call')
+    constraints: dict | None = Field(None, description='optional: no_table, keep, never_on, first '
+                                                       '(normally read from the instruction by the model)')
     planner: str = 'auto'
     attempts: int = Field(3, ge=1, le=5, description='retries when the model answer is unusable')
 
@@ -146,6 +148,7 @@ def create_app(vlm, max_visual_tokens: int = 1024, log_dir: Path = LOG_DIR) -> F
         received = len(json.dumps(req.scene)) if req.scene else sum(len(x) for _, x in blobs)
         res = openworld.run_until_ok(req.attempts, instruction=req.instruction, scene=req.scene,
                                      images=images, vlm=model, goal=req.goal, planner=req.planner,
+                                     constraints=req.constraints,
                                      max_visual_tokens=max_visual_tokens)
         return finish(rid, d, {**body, 'images': [p.name for p in images]}, res, received)
 

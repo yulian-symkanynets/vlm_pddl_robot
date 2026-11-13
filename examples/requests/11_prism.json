@@ -1,0 +1,26 @@
+{
+  "scene": {
+    "objects": [
+      {
+        "id": "blue_block",
+        "color": "blue",
+        "shape": "block",
+        "on": "table"
+      },
+      {
+        "id": "red_block",
+        "color": "red",
+        "shape": "block",
+        "on": "blue_block"
+      },
+      {
+        "id": "green_prism",
+        "color": "green",
+        "shape": "prism",
+        "on": "table"
+      }
+    ]
+  },
+  "instruction": "Put the red block on the green prism.",
+  "_expected": "no_plan or clarify: nothing can stand on a prism"
+}

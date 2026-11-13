@@ -1,0 +1,44 @@
+{
+  "scene": {
+    "objects": [
+      {
+        "id": "red_cylinder",
+        "color": "red",
+        "shape": "cylinder",
+        "on": "yellow_block"
+      },
+      {
+        "id": "yellow_block",
+        "color": "yellow",
+        "shape": "block",
+        "on": "table"
+      },
+      {
+        "id": "green_block",
+        "color": "green",
+        "shape": "block",
+        "on": "blue_cylinder"
+      },
+      {
+        "id": "blue_cylinder",
+        "color": "blue",
+        "shape": "cylinder",
+        "on": "table"
+      },
+      {
+        "id": "purple_cylinder",
+        "color": "purple",
+        "shape": "cylinder",
+        "on": "orange_block"
+      },
+      {
+        "id": "orange_block",
+        "color": "orange",
+        "shape": "block",
+        "on": "table"
+      }
+    ]
+  },
+  "instruction": "Swap where things are so the blue cylinder ends on the yellow block; keep the table free while you do it.",
+  "_expected": "different wording for no_table: model should still give no_table"
+}
