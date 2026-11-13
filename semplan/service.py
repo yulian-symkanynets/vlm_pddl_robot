@@ -293,6 +293,7 @@ class PlanningService:
                 else:
                     apply(ses.scene, ses.moves[0])
                     ses.moves = ses.moves[1:]
+                    self._first_done(ses, obj)
                 ses.cursor += 1
                 ses.state_source = "predicted"
                 ses.retries.pop(obj, None)
@@ -345,6 +346,31 @@ class PlanningService:
                                   f"{failure}: state unknown until the scene is observed again",
                                   extra_steps=[{"step": 0, "action": "VERIFY_SCENE"}])
             return self._finish(ses, "feedback", resp, t, t_start)
+
+    @staticmethod
+    def _first_done(ses: Session, obj: str) -> None:
+        """'Move X first' is satisfied once X has been placed; drop it so a later replan
+        does not move X first again."""
+        task = ses.scene.task
+        if task is None or not task.first or task.first[0] != obj:
+            return
+        from dataclasses import replace
+        ses.scene.task = replace(task, first=task.first[1:])
+        raw_task = copy.deepcopy(ses.raw.get("task") or {})
+        cons = raw_task.get("constraints") or {}
+        f = cons.get("first")
+        f = [f] if isinstance(f, str) else list(f or [])
+        if f and f[0] == obj:
+            f = f[1:]
+            if f:
+                cons["first"] = f
+            else:
+                cons.pop("first", None)
+            if cons:
+                raw_task["constraints"] = cons
+            else:
+                raw_task.pop("constraints", None)
+            ses.raw = {**ses.raw, "task": raw_task}
 
     def _requarantine(self, ses: Session) -> Scene:
         """Rebuild the scene with the current quarantine set (objects become unreachable)."""

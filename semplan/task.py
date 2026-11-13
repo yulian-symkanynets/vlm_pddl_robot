@@ -48,11 +48,12 @@ class Task:
     keep: frozenset = frozenset()
     no_temporary: bool = False
     max_height: int | None = None
+    first: tuple = ()                    # objects to move before anything else, in this order
     raw: dict = field(default_factory=dict, compare=False, hash=False)
 
     @property
     def constrained(self) -> bool:
-        return bool(self.never_on or self.keep or self.no_temporary or self.max_height)
+        return bool(self.never_on or self.keep or self.no_temporary or self.max_height or self.first)
 
     @property
     def simple(self) -> bool:
@@ -157,6 +158,8 @@ class Task:
             parts.append("do not move " + ", ".join(sorted(self.keep)))
         if self.max_height:
             parts.append(f"no stack higher than {self.max_height}")
+        if self.first:
+            parts.append("move " + ", then ".join(self.first) + " before anything else")
         return "; ".join(parts) or "nothing to do"
 
 
@@ -282,7 +285,15 @@ def parse_task(d, objects: dict, locs: dict) -> Task | None:
         for g in atoms:
             if g[0] == "on" and a in (g[1], "*") and t in (g[2], "object" if g[2] in objects else "slot"):
                 raise TaskError(f"the goal '{g[1]} on {g[2]}' contradicts never_on")
-    task = Task(tuple(atoms), sort, tuple(never), keep, bool(c.get("no_temporary")), mh, raw=d)
+    first = c.get("first") or []
+    if isinstance(first, str):
+        first = [first]
+    first = tuple(obj(x) for x in first)
+    if len(set(first)) != len(first):
+        raise TaskError("'first' lists an object twice")
+    if set(first) & set(keep):
+        raise TaskError("an object cannot be moved first and kept in place")
+    task = Task(tuple(atoms), sort, tuple(never), keep, bool(c.get("no_temporary")), mh, first, raw=d)
     if not task.atoms and not task.sort:
         raise TaskError("the task has no goal")
     return task

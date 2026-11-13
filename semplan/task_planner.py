@@ -98,8 +98,54 @@ def _search(scene: Scene, weight: float, deadline: float, max_expansions: int):
     return None, expansions, "exhausted"
 
 
+def _plan_first(scene: Scene, max_ms: float, max_expansions: int) -> PlanResult:
+    """The task says which object moves first: try every legal place for that first move,
+    plan the rest from there, keep the shortest whole plan."""
+    from dataclasses import replace
+    from .scene import why_not
+    t0 = time.perf_counter()
+    task = scene.task
+    o = task.first[0]
+    rest = scene.copy()
+    rest.task = replace(task, first=task.first[1:])
+    held = scene.held()
+    if held is not None and held != o:
+        return PlanResult("infeasible", [], "task_ordered",
+                          f"the gripper holds {held}, so {o} cannot be moved first")
+    if held is None and o not in scene.clear():
+        top = next((x for x, s in scene.on.items() if s == o), "another object")
+        return PlanResult("infeasible", [], "task_ordered",
+                          f"{o} cannot be moved first: {top} is on it")
+    dests = [d for d in legal_dests(scene, o) if d != scene.on[o] and why_not(scene, Move(o, d)) is None]
+    best, last_reason = None, f"{o} has no legal place to go"
+    for i, d in enumerate(dests):
+        left = max_ms - (time.perf_counter() - t0) * 1e3
+        if left <= 1:
+            break
+        s2 = rest.copy()
+        apply(s2, Move(o, d))
+        r = plan_task(s2, left / (len(dests) - i), max_expansions)
+        if r.status in ("ok", "partial"):
+            plan = [Move(o, d)] + r.moves
+            if best is None or len(plan) < len(best):
+                best = plan
+        else:
+            last_reason = r.reason
+    if best is None:
+        res = PlanResult("infeasible", [], "task_ordered", f"no plan that moves {o} first ({last_reason})")
+    else:
+        res = PlanResult("ok", best, "task_ordered")
+    res.deferred = scene.deferred()
+    if res.status == "ok" and res.deferred:
+        res.status = "partial"
+    res.plan_ms = (time.perf_counter() - t0) * 1e3
+    return res
+
+
 def plan_task(scene: Scene, max_ms: float = 300.0, max_expansions: int = 200_000) -> PlanResult:
     """Plan for scene.task (or the default sorting goal). status: ok | partial | infeasible."""
+    if scene.task is not None and scene.task.first:
+        return _plan_first(scene, max_ms, max_expansions)
     t0 = time.perf_counter()
     moves, n, why = _search(scene, 1.0, t0 + max_ms * 0.6 / 1e3, max_expansions)
     planner = "task_astar"

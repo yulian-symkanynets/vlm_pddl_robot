@@ -166,6 +166,16 @@ class RuleInterpreter:
         return task, ""
 
     def _constraint(self, c, scene, cons, problems) -> bool:
+        m = re.search(r"^(?:and\s+|but\s+)?(?:first|start(?:ing)? with|begin(?:ning)? with)\s+"
+                      r"(?:(?:move|moving|pick(?:ing)?(?:\s+up)?|take|taking)\s+)?(.+?)$"
+                      r"|^(?:move|pick(?:\s+up)?|take)\s+(.+?)\s+first$", c)
+        if m:
+            ids, problem = resolve(m.group(1) or m.group(2), scene)
+            if len(ids) != 1:
+                problems.append(problem or "say which one object should be moved first")
+                return True
+            cons.setdefault("first", []).append(ids[0])
+            return True
         if not re.search(r"^(?:and |please )?" + _NEG + r"\b|\b" + _NEG + r"\b.*\b(table|temporary|slot|touch|move|put|place|stack)", c) \
                 and not re.search(r"\b(leave|keep)\b.*\b(where|alone|in place|untouched)\b|\bat most\b|\bno higher\b|\bmaximum\b", c):
             return False
@@ -358,6 +368,9 @@ SEED_EXAMPLES = [
     {"instruction": "vymeň modrú a žltú kocku",
      "objects": ["a: red cube", "b: blue cube", "d: yellow cube"], "zones": [],
      "task": {"goal": [{"swap": ["b", "d"]}]}},
+    {"instruction": "put the blue cylinder on the yellow block, but first move the green block",
+     "objects": ["a: red cylinder", "b: yellow cube", "c: green cube", "d: blue cylinder"], "zones": [],
+     "task": {"goal": [{"object": "d", "on": "b"}], "constraints": {"first": ["c"]}}},
     {"instruction": "rearrange these cubes",
      "objects": ["a: red cube", "b: blue cube"], "zones": [],
      "task": {"goal": [], "question": "How should the cubes be arranged at the end?"}},
@@ -494,6 +507,7 @@ CONSTRAINT_WORDS = {
              "nehýb", "nehyb", "nechaj", "nech "),
     "never_on": ("never", "not on", "don't put", "do not put", "avoid", "nikdy", "nedávaj", "nedavaj"),
     "max_stack_height": ("high", "tall", "height", "at most", "max", "level", "vysok", "najviac"),
+    "first": ("first", "start", "begin", "before", "najprv", "najskôr", "najskor", "nejdřív", "nejdriv", "nejprve"),
 }
 
 

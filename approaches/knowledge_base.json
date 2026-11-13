@@ -208,6 +208,15 @@
     "max_stack_height": 2
    },
    "meaning": "no stack may get higher than this many objects"
+  },
+  {
+   "form": {
+    "first": [
+     "<id>",
+     "..."
+    ]
+   },
+   "meaning": "these objects are moved before anything else, in this order (\"first move X\", \"start with X\")"
   }
  ]
 }

@@ -111,8 +111,12 @@ class TaskService:
         scene_msg = dict(reading.scene)
         instruction = msg.get("instruction")
         if msg.get("task") is not None:
-            scene_msg["task"] = msg["task"]
-            u = Understanding(msg["task"], "structured")
+            from .understand import expand_operations          # {"reverse": ...}, {"swap": [...]}
+            bare = {k: v for k, v in scene_msg.items() if k not in ("task", "goal")}
+            task = dict(msg["task"])
+            task["goal"] = expand_operations(task.get("goal", []), parse_scene(bare))
+            scene_msg["task"] = task
+            u = Understanding(task, "structured")
         elif instruction:
             bare = {k: v for k, v in scene_msg.items() if k not in ("task", "goal")}
             parsed = parse_scene(bare)

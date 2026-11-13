@@ -1,0 +1,219 @@
+{
+ "about": "Scenes + instructions for the task server. 'start' is the true arrangement (object -> what it rests on), used to check that the scene was read correctly and to replay the plan independently. 'expect' says what the result must satisfy. 'task' is the structured meaning, used only when no model is running and the rule parser cannot read the sentence.",
+ "scenes": {
+  "three_stacks": {
+   "objects": [
+    {"id": "red_cylinder",    "color": "red",    "shape": "cylinder", "on": "yellow_block"},
+    {"id": "yellow_block",    "color": "yellow", "shape": "block",    "on": "table"},
+    {"id": "green_block",     "color": "green",  "shape": "block",    "on": "blue_cylinder"},
+    {"id": "blue_cylinder",   "color": "blue",   "shape": "cylinder", "on": "table"},
+    {"id": "purple_cylinder", "color": "purple", "shape": "cylinder", "on": "orange_block"},
+    {"id": "orange_block",    "color": "orange", "shape": "block",    "on": "table"}
+   ]
+  },
+  "three_stacks_relations": {
+   "objects": [
+    {"id": "red_cylinder", "color": "red", "shape": "cylinder"},
+    {"id": "yellow_block", "color": "yellow", "shape": "block"},
+    {"id": "green_block", "color": "green", "shape": "block"},
+    {"id": "blue_cylinder", "color": "blue", "shape": "cylinder"},
+    {"id": "purple_cylinder", "color": "purple", "shape": "cylinder"},
+    {"id": "orange_block", "color": "orange", "shape": "block"}
+   ],
+   "relations": [
+    {"subject": "red_cylinder", "relation": "on", "object": "yellow_block"},
+    {"subject": "green_block", "relation": "on", "object": "blue_cylinder"},
+    {"subject": "purple_cylinder", "relation": "on", "object": "orange_block"}
+   ]
+  },
+  "three_stacks_positions": {
+   "units": "mm",
+   "objects": [
+    {"id": "red_cylinder",    "color": "red",    "shape": "cylinder", "position": [400, -120, 60],  "size": 40, "height": 40},
+    {"id": "yellow_block",    "color": "yellow", "shape": "block",    "position": [402, -118, 20],  "size": 40, "height": 40},
+    {"id": "green_block",     "color": "green",  "shape": "block",    "position": [400,    0, 60],  "size": 40, "height": 40},
+    {"id": "blue_cylinder",   "color": "blue",   "shape": "cylinder", "position": [399,    2, 20],  "size": 40, "height": 40},
+    {"id": "purple_cylinder", "color": "purple", "shape": "cylinder", "position": [400,  120, 60],  "size": 40, "height": 40},
+    {"id": "orange_block",    "color": "orange", "shape": "block",    "position": [401,  121, 20],  "size": 40, "height": 40}
+   ]
+  },
+  "two_stacks": {
+   "objects": [
+    {"id": "red_cylinder",  "color": "red",    "shape": "cylinder", "on": "yellow_block"},
+    {"id": "yellow_block",  "color": "yellow", "shape": "block",    "on": "table"},
+    {"id": "green_block",   "color": "green",  "shape": "block",    "on": "blue_cylinder"},
+    {"id": "blue_cylinder", "color": "blue",   "shape": "cylinder", "on": "table"}
+   ]
+  },
+  "tall_and_prism": {
+   "objects": [
+    {"id": "blue_block",   "color": "blue",   "shape": "block",    "on": "table"},
+    {"id": "red_block",    "color": "red",    "shape": "block",    "on": "blue_block"},
+    {"id": "yellow_block", "color": "yellow", "shape": "block",    "on": "red_block"},
+    {"id": "green_prism",  "color": "green",  "shape": "prism",    "on": "table"},
+    {"id": "white_block",  "color": "white",  "shape": "block",    "on": "table"},
+    {"id": "orange_cylinder", "color": "orange", "shape": "cylinder", "on": "white_block"}
+   ]
+  },
+  "with_zones": {
+   "objects": [
+    {"id": "red_cylinder",  "color": "red",    "shape": "cylinder", "on": "yellow_block"},
+    {"id": "yellow_block",  "color": "yellow", "shape": "block",    "on": "table"},
+    {"id": "green_block",   "color": "green",  "shape": "block",    "on": "blue_cylinder"},
+    {"id": "blue_cylinder", "color": "blue",   "shape": "cylinder", "on": "table"}
+   ],
+   "zones": [
+    {"id": "green_zone",  "color": "green",  "capacity": 1},
+    {"id": "blue_zone",   "color": "blue",   "capacity": 1},
+    {"id": "yellow_zone", "color": "yellow", "capacity": 1},
+    {"id": "red_zone",    "color": "red",    "capacity": 1}
+   ]
+  }
+ },
+ "starts": {
+  "three": {"red_cylinder": "yellow_block", "yellow_block": "table", "green_block": "blue_cylinder",
+            "blue_cylinder": "table", "purple_cylinder": "orange_block", "orange_block": "table"},
+  "two": {"red_cylinder": "yellow_block", "yellow_block": "table", "green_block": "blue_cylinder",
+          "blue_cylinder": "table"},
+  "tall": {"blue_block": "table", "red_block": "blue_block", "yellow_block": "red_block",
+           "green_prism": "table", "white_block": "table", "orange_cylinder": "white_block"}
+ },
+ "scenarios": [
+  {"name": "two goals, table allowed",
+   "scene": "three_stacks", "start": "three",
+   "instruction": "Put the blue cylinder on the yellow block and the green block on the red cylinder.",
+   "expect": {"status": "ok", "on": [["blue_cylinder", "yellow_block"], ["green_block", "red_cylinder"]]}},
+
+  {"name": "two goals, no table",
+   "scene": "three_stacks", "start": "three",
+   "instruction": "Put the blue cylinder on the yellow block and the green block on the red cylinder, but do not put anything on the table.",
+   "task": {"goal": [{"object": "blue_cylinder", "on": "yellow_block"}, {"object": "green_block", "on": "red_cylinder"}],
+            "constraints": {"no_temporary": true}},
+   "expect": {"status": "ok", "on": [["blue_cylinder", "yellow_block"], ["green_block", "red_cylinder"]],
+              "no_place_on": ["table"]}},
+
+  {"name": "move red onto blue, other blocks not on the table",
+   "scene": "three_stacks", "start": "three",
+   "instruction": "Put the red cylinder on the blue cylinder, but do not put any block on the table.",
+   "task": {"goal": [{"object": "red_cylinder", "on": "blue_cylinder"}], "constraints": {"no_temporary": true}},
+   "expect": {"status": "ok", "on": [["red_cylinder", "blue_cylinder"]], "no_place_on": ["table"]}},
+
+  {"name": "move red and blue, no table",
+   "scene": "three_stacks", "start": "three",
+   "instruction": "Put the red cylinder on the orange block and the blue cylinder on the red cylinder, and do not put anything on the table.",
+   "task": {"goal": [{"object": "red_cylinder", "on": "orange_block"}, {"object": "blue_cylinder", "on": "red_cylinder"}],
+            "constraints": {"no_temporary": true}},
+   "expect": {"status": "ok", "on": [["red_cylinder", "orange_block"], ["blue_cylinder", "red_cylinder"]],
+              "no_place_on": ["table"]}},
+
+  {"name": "same scene as relations list",
+   "scene": "three_stacks_relations", "start": "three",
+   "instruction": "Put the red cylinder on the blue cylinder, but do not put any block on the table.",
+   "task": {"goal": [{"object": "red_cylinder", "on": "blue_cylinder"}], "constraints": {"no_temporary": true}},
+   "expect": {"status": "ok", "on": [["red_cylinder", "blue_cylinder"]], "no_place_on": ["table"]}},
+
+  {"name": "same scene as positions only (mm)",
+   "scene": "three_stacks_positions", "start": "three",
+   "instruction": "Put the red cylinder on the blue cylinder, but do not put any block on the table.",
+   "task": {"goal": [{"object": "red_cylinder", "on": "blue_cylinder"}], "constraints": {"no_temporary": true}},
+   "expect": {"status": "ok", "on": [["red_cylinder", "blue_cylinder"]], "no_place_on": ["table"]}},
+
+  {"name": "first move green",
+   "scene": "three_stacks", "start": "three",
+   "instruction": "Put the blue cylinder on the yellow block and the green block on the red cylinder. But first move the green block.",
+   "task": {"goal": [{"object": "blue_cylinder", "on": "yellow_block"}, {"object": "green_block", "on": "red_cylinder"}],
+            "constraints": {"first": ["green_block"]}},
+   "expect": {"status": "ok", "on": [["blue_cylinder", "yellow_block"], ["green_block", "red_cylinder"]],
+              "first_pick": "green_block"}},
+
+  {"name": "leave purple where it is",
+   "scene": "three_stacks", "start": "three",
+   "instruction": "Put the green block on the yellow block, but leave the purple cylinder where it is.",
+   "task": {"goal": [{"object": "green_block", "on": "yellow_block"}], "constraints": {"keep": ["purple_cylinder"]}},
+   "expect": {"status": "ok", "on": [["green_block", "yellow_block"]], "unmoved": ["purple_cylinder"]}},
+
+  {"name": "never on purple",
+   "scene": "three_stacks", "start": "three",
+   "instruction": "Put the green block on the yellow block, but never put anything on the purple cylinder.",
+   "task": {"goal": [{"object": "green_block", "on": "yellow_block"}],
+            "constraints": {"never_on": [["*", "purple_cylinder"]]}},
+   "expect": {"status": "ok", "on": [["green_block", "yellow_block"]], "no_place_on": ["purple_cylinder"]}},
+
+  {"name": "never on purple AND no table (needs a detour)",
+   "scene": "three_stacks", "start": "three",
+   "instruction": "Put the green block on the yellow block. Never put anything on the purple cylinder and do not use the table.",
+   "task": {"goal": [{"object": "green_block", "on": "yellow_block"}],
+            "constraints": {"never_on": [["*", "purple_cylinder"]], "no_temporary": true}},
+   "expect": {"status": "ok", "on": [["green_block", "yellow_block"]], "no_place_on": ["table", "purple_cylinder"]}},
+
+  {"name": "one tower of three",
+   "scene": "three_stacks", "start": "three",
+   "instruction": "Build a tower: yellow block at the bottom, then the blue cylinder, then the red cylinder on top.",
+   "task": {"goal": [{"stack": ["yellow_block", "blue_cylinder", "red_cylinder"]}]},
+   "expect": {"status": "ok", "on": [["blue_cylinder", "yellow_block"], ["red_cylinder", "blue_cylinder"]]}},
+
+  {"name": "towers at most 2 high",
+   "scene": "three_stacks", "start": "three",
+   "instruction": "Put the red cylinder on the green block, but no stack may be higher than 2.",
+   "task": {"goal": [{"object": "red_cylinder", "on": "green_block"}], "constraints": {"max_stack_height": 2}},
+   "expect": {"status": "ok", "on": [["red_cylinder", "green_block"]], "max_height": 2}},
+
+  {"name": "reverse all stacks",
+   "scene": "three_stacks", "start": "three",
+   "instruction": "Reverse all three stacks.",
+   "task": {"goal": [{"reverse": "all"}]},
+   "expect": {"status": "ok", "on": [["yellow_block", "red_cylinder"], ["blue_cylinder", "green_block"],
+                                      ["orange_block", "purple_cylinder"]]}},
+
+  {"name": "swap two objects",
+   "scene": "three_stacks", "start": "three",
+   "instruction": "Swap the red cylinder and the green block.",
+   "task": {"goal": [{"swap": ["red_cylinder", "green_block"]}]},
+   "expect": {"status": "ok", "on": [["green_block", "yellow_block"], ["red_cylinder", "blue_cylinder"]]}},
+
+  {"name": "take something off",
+   "scene": "three_stacks", "start": "three",
+   "instruction": "Take the purple cylinder off the orange block.",
+   "task": {"goal": [{"object": "purple_cylinder", "not_on": "orange_block"}]},
+   "expect": {"status": "ok", "not_on": [["purple_cylinder", "orange_block"]]}},
+
+  {"name": "impossible without the table (2 stacks)",
+   "scene": "two_stacks", "start": "two",
+   "instruction": "Put the blue cylinder on the yellow block, but do not put anything on the table.",
+   "task": {"goal": [{"object": "blue_cylinder", "on": "yellow_block"}], "constraints": {"no_temporary": true}},
+   "expect": {"status": "infeasible"}},
+
+  {"name": "dig out the bottom of a tall stack",
+   "scene": "tall_and_prism", "start": "tall",
+   "instruction": "Put the blue block on the orange cylinder.",
+   "task": {"goal": [{"object": "blue_block", "on": "orange_cylinder"}]},
+   "expect": {"status": "ok", "on": [["blue_block", "orange_cylinder"]]}},
+
+  {"name": "dig out, no table: must use the other tops",
+   "scene": "tall_and_prism", "start": "tall",
+   "instruction": "Put the blue block on the orange cylinder without putting anything on the table.",
+   "task": {"goal": [{"object": "blue_block", "on": "orange_cylinder"}], "constraints": {"no_temporary": true}},
+   "expect": {"status": "infeasible"}},
+
+  {"name": "nothing can stand on a prism",
+   "scene": "tall_and_prism", "start": "tall",
+   "instruction": "Put the yellow block on the green prism.",
+   "expect": {"status": "clarify"}},
+
+  {"name": "sort into zones, one place each",
+   "scene": "with_zones", "start": "two",
+   "instruction": "Sort the objects by colour.",
+   "expect": {"status": "ok", "in": [["red_cylinder", "red_zone"], ["yellow_block", "yellow_zone"],
+                                      ["green_block", "green_zone"], ["blue_cylinder", "blue_zone"]]}},
+
+  {"name": "unknown object",
+   "scene": "three_stacks", "start": "three",
+   "instruction": "Put the black cube on the red cylinder.",
+   "expect": {"status": "clarify"}},
+
+  {"name": "too vague",
+   "scene": "three_stacks", "start": "three",
+   "instruction": "Rearrange these blocks.",
+   "expect": {"status": "clarify"}}
+ ]
+}
