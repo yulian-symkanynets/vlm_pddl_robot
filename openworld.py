@@ -237,9 +237,40 @@ def resolve_goal(raw_goal, sc: dict) -> tuple[list[tuple[str, ...]] | None, str 
     return out, None
 
 
+def _norm_words(text: str) -> str:
+    return ' '.join(re.findall(r'\w+', str(text).lower()))
+
+
+def backed_by_words(constraints: dict, evidence, instruction: str) -> tuple[dict, list[str]]:
+    """Keep a constraint only when its quoted evidence occurs in the instruction."""
+    ev = evidence if isinstance(evidence, dict) else {}
+    text = _norm_words(instruction)
+    kept, dropped = {}, []
+    for k, v in constraints.items():
+        if v in (None, False, [], {}, ''):
+            continue
+        q = _norm_words(ev.get(k, ''))
+        if q and q in text:
+            kept[k] = v
+        else:
+            dropped.append(k)
+    return kept, dropped
+
+
 def explain_no_plan(sc: dict, goal) -> str:
+    return '; '.join(certain_no_plan(sc, goal)) or 'the planner found no sequence of actions that reaches the goal'
+
+
+def certain_no_plan(sc: dict, goal) -> list[str]:
+    """Reasons that make the goal impossible, found without search (microseconds).
+    Checked BEFORE planning: otherwise an impossible goal keeps the optimal planner busy
+    until its timeout and the fallback planners until theirs, about a minute in total."""
     items, places = sc['items'], sc['env']['places']
     reasons = []
+    import pddl_task
+    for g in goal:
+        if g[0] == 'on' and g[2] in items and pddl_task._no_top(items[g[2]]):
+            reasons.append(f'nothing can stand on {g[2]} (it has no flat top)')
     for p, d in places.items():
         want = [g[1] for g in goal if g[0] == 'in' and g[2] == p]
         if len(want) > d['slots']:
@@ -249,7 +280,7 @@ def explain_no_plan(sc: dict, goal) -> str:
             h = items[x].get('height_mm')
             if c is not None and h is not None and h > c:
                 reasons.append(f'{x} ({h:g} mm) is too tall for {p} ({c:g} mm clearance)')
-    return '; '.join(reasons) or 'the planner found no sequence of actions that reaches the goal'
+    return reasons
 
 
 # --------------------------------------------------------------------------- prompts
@@ -304,7 +335,8 @@ One entry per requirement:
   {{"object": "<id>", "on": "table"}}
 "object" is always the one that is moved or placed on top. A stack of three needs two entries
 (top on middle, middle on bottom). List only what the instruction requires.
-If the instruction also limits HOW it may be done, add "constraints" (only what the instruction says):
+If the instruction also limits HOW it may be done, add "constraints" (only what the instruction says),
+and for every constraint copy the EXACT words of the instruction that say it into "evidence":
   "no_table": true                       nothing may be put down on the table
   "keep": ["<id>", ...]                  these objects must not be moved
   "never_on": [["<id or *>", "<id, place id or table>"], ...]   never place the first on the second
@@ -312,8 +344,10 @@ If the instruction also limits HOW it may be done, add "constraints" (only what 
 If the instruction mentions something that is not listed, is ambiguous, or cannot be written this way,
 return {{"goal": [], "question": "<short question for the user>"}}.
 
+Most instructions have no constraints: then leave "constraints" empty.
+
 Return only JSON:
-{{"goal": [ ... ], "constraints": {{ ... }}}}"""
+{{"goal": [ ... ], "constraints": {{ ... }}, "evidence": {{"<constraint>": "<exact words from the instruction>"}}}}"""
 
 
 def _json_answer(text: str):
@@ -327,11 +361,19 @@ def _json_answer(text: str):
 
 
 # --------------------------------------------------------------------------- planner
-def plan_for(sc: dict, goal, planner: str = 'auto', constraints: dict | None = None) -> dict:
+OPTIMAL_TIMEOUT_S = 5.0          # optimal search, only when the fast plan is not proven shortest
+SATISFICING_TIMEOUT_S = 20.0     # fast planner; certain impossibilities are caught before planning
+
+
+def plan_for(sc: dict, goal, planner: str = 'auto', constraints: dict | None = None, memory=None) -> dict:
     """Scene + grounded goal (+ the task's constraints) -> PDDL domain and problem for THIS
     request -> plan -> verified on the same problem."""
     import pddl_task
     cons = constraints or {}
+    impossible = certain_no_plan(sc, goal)
+    if impossible:
+        return {'status': 'no_plan', 'message': '; '.join(impossible), 'plan': None,
+                'planner': 'precheck', 'planner_status': 'unsolvable', 'plan_s': 0.0}
     ptext = make_problem('openworld', sc['env'], sc['items'], sc['support'], goal, sc['hidden'])
     domain_pddl, domain_path = None, None
     if pddl_task.needs_custom_domain(cons, sc):
@@ -340,7 +382,32 @@ def plan_for(sc: dict, goal, planner: str = 'auto', constraints: dict | None = N
         domain_path = pddl_task.write_domain(domain_pddl)
     try:
         problem = parse_problem(ptext, domain_path) if domain_path else parse_problem(ptext)
-        status, acts, dt, used = solve(problem, planner)
+        hit, mem_state = None, None
+        if memory is not None:                    # the exact same problem was solved before
+            pkey = memory.key('plan', ptext, domain_pddl or DOMAIN_PATH.read_text(), planner,
+                              OPTIMAL_TIMEOUT_S, SATISFICING_TIMEOUT_S)
+            hit = memory.get('plan', pkey)
+            mem_state = 'hit' if hit is not None else 'miss'
+        if hit is not None:
+            t_mem = time.perf_counter()
+            acts = [(a, list(args)) for a, args in hit['acts']]
+            status, used = hit['status'], hit['planner']
+            dt = time.perf_counter() - t_mem
+        else:
+            if planner == 'auto':
+                # 1. a fast planner (about 0.1 s). 2. if its plan moves only objects that must move,
+                # each once, no plan can be shorter: done. 3. otherwise optimal search, and keep the
+                # fast plan if that search does not finish in time (the response says so).
+                import plan_quality
+                status, acts, dt, used = solve(problem, 'auto', timeout=SATISFICING_TIMEOUT_S)
+                lb = len(plan_quality.must_move(sc['support'], sc['items'], goal))
+                if acts is not None and len(plan_quality.moves_of(acts)) > lb:
+                    s2, a2, dt2, u2 = solve(problem, 'fast-downward-opt', timeout=OPTIMAL_TIMEOUT_S)
+                    dt += dt2
+                    if a2 is not None:
+                        status, acts, used = s2, a2, u2
+            else:
+                status, acts, dt, used = solve(problem, planner)
     finally:
         if domain_path:
             domain_path.unlink(missing_ok=True)
@@ -350,6 +417,13 @@ def plan_for(sc: dict, goal, planner: str = 'auto', constraints: dict | None = N
     if acts is None:
         return {**out, 'status': 'no_plan', 'message': explain_no_plan(sc, goal), 'plan': None}
     sim = simulate(problem, acts)
+    if sim['ok']:
+        import plan_quality
+        out['quality'] = plan_quality.assess(sc, goal, acts, used, str(status))
+        if mem_state == 'miss':
+            memory.put('plan', pkey, {'acts': acts, 'planner': used, 'status': str(status)})
+    if mem_state:
+        out['memory_plan'] = mem_state
     return {**out, 'status': 'ok' if sim['ok'] else 'error',
             'message': None if sim['ok'] else f'plan failed verification: {sim["fail_reason"]}',
             'verified': sim['ok'],
@@ -361,12 +435,18 @@ def plan_for(sc: dict, goal, planner: str = 'auto', constraints: dict | None = N
 # --------------------------------------------------------------------------- end to end
 def run(instruction: str | None = None, scene: dict | None = None, images=None, vlm=None,
         goal=None, planner: str = 'auto', max_visual_tokens: int = 1024, sample: bool = False,
-        constraints: dict | None = None) -> dict:
+        constraints: dict | None = None, memory=None) -> dict:
     """The server's job. Give `scene` (semantic path) or `images` (+ vlm). `goal` skips the goal call."""
     t0 = time.perf_counter()
     res = {'status': 'error', 'message': None, 'instruction': instruction, 'timings': {}, 'model_answers': {}}
+    pending = []                                  # experience_db entries, stored only if the request ends ok
+    if memory is not None:
+        res['memory'] = {}
 
     def done(status, message=None, **kw):
+        if status == 'ok' and memory is not None:
+            for kind, key, value, meta in pending:
+                memory.put(kind, key, value, meta)
         res.update(status=status, message=message, **kw)
         res['timings']['total_s'] = round(time.perf_counter() - t0, 3)
         return res
@@ -375,10 +455,21 @@ def run(instruction: str | None = None, scene: dict | None = None, images=None, 
     if scene is None:
         if not images:
             return done('error', 'send "scene" (JSON) or image(s)')
-        if vlm is None:
-            return done('error', 'no model loaded, images cannot be processed')
-        g = vlm.generate(list(images), perceive_prompt(len(images)), max_visual_tokens, sample=sample,
-                         context={'mode': 'ow_perceive'})
+        prompt, g = perceive_prompt(len(images)), None
+        if memory is not None:                    # same model, prompt, budget and image bytes -> same answer
+            from pathlib import Path
+            skey = memory.key('scene', prompt, max_visual_tokens, *[Path(p).read_bytes() for p in images])
+            hit = None if sample else memory.get('scene', skey)
+            if hit is not None:
+                g = {'text': hit, 'generate_s': 0.0}
+            res['memory']['scene'] = 'hit' if hit is not None else 'miss'
+        if g is None:
+            if vlm is None:
+                return done('error', 'no model loaded, images cannot be processed')
+            g = vlm.generate(list(images), prompt, max_visual_tokens, sample=sample,
+                             context={'mode': 'ow_perceive'})
+            if memory is not None:
+                pending.append(('scene', skey, g['text'], {}))
         res['model_answers']['perceive'] = g['text']
         res['timings']['perceive_s'] = g['generate_s']
         scene, err = _json_answer(g['text'])
@@ -398,10 +489,25 @@ def run(instruction: str | None = None, scene: dict | None = None, images=None, 
     if goal is None:
         if not instruction:
             return done('error', 'send "instruction" or "goal"')
-        if vlm is None:
-            return done('error', 'no model loaded, the instruction cannot be interpreted')
-        g = vlm.generate([], goal_prompt(sc, instruction), sample=sample, context={'mode': 'ow_goal', 'scene': sc,
-                                                                     'instruction': instruction})
+        gp, g = goal_prompt(sc, instruction), None
+        if memory is not None:
+            ex = memory.examples_block(instruction) if memory.examples else ''
+            if ex:                                # similar earlier instructions as examples (optional)
+                gp = gp.replace(f'Instruction: {instruction}', ex + f'Instruction: {instruction}', 1)
+                res['memory']['examples'] = ex.count('\n- objects:')
+            gkey = memory.key('goal', gp)         # the prompt has no arrangement: same objects + words -> same goal
+            hit = None if sample else memory.get('goal', gkey)
+            if hit is not None:
+                g = {'text': hit, 'generate_s': 0.0}
+            res['memory']['goal'] = 'hit' if hit is not None else 'miss'
+        if g is None:
+            if vlm is None:
+                return done('error', 'no model loaded, the instruction cannot be interpreted')
+            g = vlm.generate([], gp, sample=sample, context={'mode': 'ow_goal', 'scene': sc,
+                                                              'instruction': instruction})
+            if memory is not None:
+                objs = ', '.join(f"{i}: {d['label']}" for i, d in sc['items'].items())
+                pending.append(('goal', gkey, g['text'], {'instruction': instruction, 'objects': objs}))
         res['model_answers']['goal'] = g['text']
         res['timings']['goal_s'] = g['generate_s']
         js, err = _json_answer(g['text'])
@@ -410,7 +516,12 @@ def run(instruction: str | None = None, scene: dict | None = None, images=None, 
         if isinstance(js, dict) and js.get('question') and not js.get('goal'):
             return done('clarify', js['question'])
         if constraints is None and isinstance(js, dict) and isinstance(js.get('constraints'), dict):
-            constraints = js['constraints']      # what the sentence forbids, as the model read it
+            # what the sentence forbids, as the model read it; a constraint is kept only if the
+            # model quotes words that really are in the instruction (works in any language)
+            constraints, dropped = backed_by_words(js['constraints'], js.get('evidence'), instruction)
+            if dropped:
+                res.setdefault('warnings', []).append(
+                    'ignored constraints the instruction does not state: ' + ', '.join(dropped))
         goal = js.get('goal') if isinstance(js, dict) else js
     grounded, problem = resolve_goal(goal, sc)
     if problem:
@@ -428,13 +539,94 @@ def run(instruction: str | None = None, scene: dict | None = None, images=None, 
 
     # 3) PDDL + planner + verification
     try:
-        p = plan_for(sc, grounded, planner, cons)
+        p = plan_for(sc, grounded, planner, cons, memory=memory)
     except Exception as e:                       # noqa: BLE001  (report, do not crash the server)
         return done('error', f'planning: {type(e).__name__}: {e}')
     res['timings']['plan_s'] = p.pop('plan_s')
+    if 'memory_plan' in p:
+        res['memory']['plan'] = p.pop('memory_plan')
     status, msg = p.pop('status'), p.pop('message')
     res.update(p)
     return done(status, msg)
+
+
+# --------------------------------------------------------------------------- perception only
+def perceive(images, vlm, max_visual_tokens: int = 1024) -> tuple[dict | None, str | None, dict]:
+    """Image(s) -> scene JSON written by the VLM (no goal, no planning)."""
+    g = vlm.generate(list(images), perceive_prompt(len(images)), max_visual_tokens,
+                     context={'mode': 'ow_perceive'})
+    scene, err = _json_answer(g['text'])
+    return scene, err, g
+
+
+# --------------------------------------------------------------------------- scene changed
+def _after_actions(support: dict, plan: list[dict]) -> list[dict]:
+    """The arrangement after 0, 1, 2, ... actions of a plan (only complete pick+place pairs)."""
+    cur, states = dict(support), [(0, dict(support))]
+    for i, a in enumerate(plan, 1):
+        name, args = a['action'], a['args']
+        if name == 'place-on-table':
+            cur[args[0]] = 'table'
+        elif name == 'place-on-item':
+            cur[args[0]] = args[1]
+        elif name == 'place-in':
+            cur[args[0]] = args[2]
+        else:
+            continue
+        states.append((i, dict(cur)))
+    return states
+
+
+def replan(previous: dict, new_scene: dict, planner: str = 'auto', memory=None) -> dict:
+    """The scene changed after a plan was made (robot progress, a person moved something, an
+    object appeared or vanished). Reuses the goal and constraints already understood, so the
+    VLM is not called again.
+
+    decision "kept":      the new scene is a state the old plan passes through -> the rest of it
+    decision "replanned": anything else -> a new plan from the new scene
+    """
+    t0 = time.perf_counter()
+    goal = previous.get('goal')
+    if not goal:
+        return {'status': 'error', 'message': 'the previous request has no understood goal to replan for'}
+    cons = dict(previous.get('constraints') or {})
+    old_support = dict((previous.get('scene') or {}).get('support') or {})
+    try:
+        sc = normalize_scene(new_scene)
+    except SceneError as e:
+        return {'status': 'error', 'message': f'scene: {e}'}
+    new_support = {x: y for x, y in sc['support'].items()}
+    changes = []
+    for x in sorted(set(old_support) | set(new_support)):
+        a, b = old_support.get(x), new_support.get(x)
+        if a is None:
+            changes.append(f'{x} appeared on {b}')
+        elif b is None:
+            changes.append(f'{x} disappeared')
+        elif a != b:
+            changes.append(f'{x}: {a} -> {b}')
+    if cons.get('first') and old_support.get(cons['first']) != new_support.get(cons['first']):
+        cons.pop('first')                        # "move X first" is done once X has moved
+    old_plan = previous.get('plan') or []
+    if set(old_support) == set(new_support) and not sc['unknown']:
+        for k, state in _after_actions(old_support, old_plan):
+            if state == new_support:
+                rest = old_plan[k:]
+                import plan_quality
+                grounded, _ = resolve_goal(goal, sc)
+                quality = plan_quality.assess(sc, grounded or [], rest, '', '')
+                if (previous.get('quality') or {}).get('optimal') and not quality['optimal']:
+                    # the rest of a shortest plan, from a state on that plan, is itself shortest
+                    quality.update(optimal=True, max_extra_moves=0,
+                                   proof='remaining part of a plan that was proven shortest')
+                return {'status': 'ok', 'decision': 'kept', 'message': None, 'quality': quality,
+                        'changes': changes, 'goal': goal, 'constraints': cons,
+                        'scene': scene_to_json(sc), 'plan': rest, 'done_actions': k,
+                        'timings': {'total_s': round(time.perf_counter() - t0, 3)}}
+    res = run(scene=new_scene, goal=goal, constraints=cons, planner=planner, memory=memory)
+    res['decision'] = 'replanned'
+    res['changes'] = changes
+    return res
 
 
 def retryable(res: dict) -> bool:
@@ -538,7 +730,13 @@ class RuleMock:
         m = re.search(r"(?:leave|keep) (?:the )?([a-z_ ]+?) (?:where it is|in place|alone)", low)
         if m and self._find(m.group(1), sc):
             cons['keep'] = [self._find(m.group(1), sc)]
-        return {'goal': goal, **({'constraints': cons} if cons else {})}
+        ev = {}
+        for k, pat in (('no_table', r"(?:do not|don't|never|without|no)\b[^.,]*\btable\b"),
+                       ('first', r"first [a-z_ ]+"), ('keep', r"(?:leave|keep) [a-z_ ]+")):
+            m = re.search(pat, low)
+            if k in cons and m:
+                ev[k] = m.group(0)
+        return {'goal': goal, **({'constraints': cons, 'evidence': ev} if cons else {})}
 
 
 def domain_text() -> str:

@@ -83,6 +83,54 @@ $ printf 'nameserver 8.8.8.8\nnameserver 1.1.1.1\n' | sudo tee /etc/resolv.conf
 $ printf '[network]\ngenerateResolvConf = false\n' | sudo tee /etc/wsl.conf     # keep it after restarts
 ```
 
+## Which model (faster ones)
+
+All models are listed in `models.yaml`; start any of them with `./serve.sh start <key> <quant>`.
+
+| Key | Size | Note |
+|---|---|---|
+| `qwen3-vl-8b` | 8B | the default so far |
+| `qwen3-vl-4b` | 4B | |
+| `qwen3-vl-2b` | 2B | same family as the default: the safest faster model to try first |
+| `qwen3.5-4b` | 4B | newer (2026); thinks by default, switched off in `models.yaml` |
+| `qwen3.5-2b` | 2B | newer (2026), non-thinking |
+| `qwen3.5-0.8b` | 0.8B | smallest; meant for prototyping |
+| `lfm2.5-vl-1.6b` | 1.6B | Liquid AI, built for speed; license lfm1.0 |
+
+* Small models are usually fastest in `bf16` (no 4-bit decompression on every token):
+  `./serve.sh start qwen3-vl-2b bf16`.
+* Qwen3.5 needs the newest transformers, LFM2.5-VL transformers >= 5.1:
+  `.venv/bin/pip install -U "transformers>=5.1"` (Qwen3.5: `pip install -U git+https://github.com/huggingface/transformers`
+  if the release is not new enough). Check that the older models still load afterwards.
+* None of these new models has been run yet. Compare them on the photographed scenes:
+  `./serve.sh stop && scripts/compare_models.sh`, then open `/dashboard` (chart "Models: speed against
+  correct plans"). A faster model is only useful if its plans still work.
+
+## Is the plan the shortest one?
+
+Every `ok` response carries a `quality` field (the robot side may ignore it):
+
+```json
+"quality": {"moves": 3, "lower_bound": 3, "optimal": true,
+            "proof": "the plan moves only objects that must move, each once",
+            "max_extra_moves": 0, "moved_more_than_once": []}
+```
+
+* `lower_bound`: objects that must be picked up at least once (goal not met, in the way of
+  another object's goal, or standing on top of something that must move). No plan can be shorter.
+* The server first asks a fast planner (about 0.1 s). If that plan has exactly `lower_bound`
+  moves it is proven shortest and returned at once. Only otherwise does it run the optimal
+  search (Fast Downward `astar(lmcut())`, at most `OPTIMAL_TIMEOUT_S` = 5 s).
+* `optimal: false` only if the optimal search did not finish in time; then
+  `max_extra_moves` says how many moves the plan could have in excess.
+* `moved_more_than_once` lists objects picked up twice. In a plan proven shortest this is
+  unavoidable (for example two objects that stand in each other's zone).
+* Goals that are certainly impossible (a zone with fewer slots than objects that must go
+  there, something on a prism, too tall for a shelf) are answered as `no_plan` before any
+  planning, instead of after the planners' timeouts.
+* After a scene change, a kept plan keeps its proof: the rest of a shortest plan, from a
+  state on that plan, is itself shortest.
+
 ## Quick problem table
 
 | Problem | Fix |

@@ -40,5 +40,23 @@
     ]
   },
   "instruction": "Put the green block on the yellow block, but leave the purple cylinder where it is.",
-  "_expected": "constraints keep=[purple_cylinder]; purple never picked"
+  "_expected": "constraints keep=[purple_cylinder]; purple never picked",
+  "_check": {
+    "status": "ok",
+    "on": [
+      [
+        "green_block",
+        "yellow_block"
+      ]
+    ],
+    "constraints": {
+      "keep": [
+        "purple_cylinder"
+      ]
+    },
+    "never_pick": [
+      "purple_cylinder"
+    ],
+    "max_moves": 2
+  }
 }

@@ -1,0 +1,42 @@
+{
+ "low": {
+  "images": 12,
+  "mean_bytes": 18341.666666666668,
+  "mean_tokens": 116.66666666666667,
+  "budget": 256,
+  "mean_width": 260.6666666666667,
+  "mean_height": 448.0
+ },
+ "medium": {
+  "images": 12,
+  "mean_bytes": 42654.916666666664,
+  "mean_tokens": 348.0,
+  "budget": 512,
+  "mean_width": 446.75,
+  "mean_height": 768.0
+ },
+ "high": {
+  "images": 12,
+  "mean_bytes": 103412.33333333333,
+  "mean_tokens": 928.6666666666666,
+  "budget": 1024,
+  "mean_width": 744.6666666666666,
+  "mean_height": 1280.0
+ },
+ "full": {
+  "images": 12,
+  "mean_bytes": 248220.25,
+  "mean_tokens": 1024.0,
+  "budget": 1024,
+  "mean_width": 1439.5,
+  "mean_height": 2497.25
+ },
+ "low + crop": {
+  "images": 12,
+  "mean_bytes": 14031.916666666666,
+  "mean_tokens": 115.5,
+  "budget": 256,
+  "mean_width": 243.08333333333334,
+  "mean_height": 448.0
+ }
+}

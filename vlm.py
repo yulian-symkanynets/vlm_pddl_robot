@@ -27,12 +27,40 @@ def load_images(paths: list[Path]):
     return images
 
 
+def model_class_names(spec: dict) -> list[str]:
+    """transformers Auto classes to try, in order. models.yaml: auto_class (optional).
+    Newer cards (Qwen3.5, LFM2.5) use AutoModelForMultimodalLM; older ones AutoModelForImageTextToText."""
+    first = {'multimodal-lm': 'AutoModelForMultimodalLM',
+             'image-text-to-text': 'AutoModelForImageTextToText'}[spec.get('auto_class', 'image-text-to-text')]
+    return [first] + [c for c in ('AutoModelForImageTextToText', 'AutoModelForMultimodalLM') if c != first]
+
+
+def processor_kwargs(spec: dict, max_visual_tokens: int) -> dict:
+    """Arguments for AutoProcessor.from_pretrained. models.yaml:
+         processor_size: qwen (default)  pixel budget as Qwen-VL processors read it
+                         none            no budget here; the server's image resizing limits the pixels
+         processor_kwargs: {...}         passed through unchanged (e.g. LFM2.5's max_image_tokens)"""
+    kw = dict(spec.get('processor_kwargs') or {})
+    if spec.get('processor_size', 'qwen') == 'qwen':
+        px = spec.get('patch', 32) ** 2
+        # pixel budget per image; 'size' replaces the deprecated min_pixels/max_pixels kwargs
+        kw['size'] = {'shortest_edge': min(256, max_visual_tokens) * px, 'longest_edge': max_visual_tokens * px}
+    return kw
+
+
+def template_kwargs(spec: dict) -> dict:
+    """Extra chat-template options. models.yaml: chat_template_kwargs, e.g. {enable_thinking: false}
+    for models that think by default (Qwen3.5-4B)."""
+    return dict(spec.get('chat_template_kwargs') or {})
+
+
 class HFVLM:
     """One loaded model. Load once, call generate() many times."""
 
     def __init__(self, key: str, spec: dict, quant: str = '4bit'):
         import torch
-        from transformers import AutoModelForImageTextToText, BitsAndBytesConfig
+        import transformers
+        from transformers import BitsAndBytesConfig
         if not torch.cuda.is_available():
             raise SystemExit('CUDA is not available. Run check_env.py; use --models mock to test without a GPU.')
         self.torch = torch
@@ -49,9 +77,21 @@ class HFVLM:
             raise ValueError(f'unknown quant {quant}')
         torch.cuda.reset_peak_memory_stats()
         t0 = time.perf_counter()
-        self.model = AutoModelForImageTextToText.from_pretrained(
-            self.hf, dtype=dtype, device_map={'': 0}, quantization_config=qc,
-            attn_implementation='sdpa').eval()
+        errors = []
+        for name in model_class_names(spec):
+            cls = getattr(transformers, name, None)
+            if cls is None:
+                errors.append(f'{name}: not in transformers {transformers.__version__}')
+                continue
+            try:
+                self.model = cls.from_pretrained(self.hf, dtype=dtype, device_map={'': 0}, quantization_config=qc,
+                                                 attn_implementation='sdpa').eval()
+                break
+            except (ValueError, KeyError) as e:          # this Auto class does not know the architecture
+                errors.append(f'{name}: {e}')
+        else:
+            raise SystemExit(f'cannot load {self.hf}: ' + ' | '.join(errors) +
+                             '\nNewer models may need a newer transformers (see the comment in models.yaml).')
         torch.cuda.synchronize()
         self.load_s = time.perf_counter() - t0
         self.weights_vram_gb = torch.cuda.max_memory_allocated() / 1024 ** 3
@@ -61,12 +101,43 @@ class HFVLM:
     def processor(self, max_visual_tokens: int):
         if max_visual_tokens not in self._processors:
             from transformers import AutoProcessor
-            px = self.spec.get('patch', 32) ** 2
-            # pixel budget per image; 'size' replaces the deprecated min_pixels/max_pixels kwargs
-            size = {'shortest_edge': min(256, max_visual_tokens) * px,
-                    'longest_edge': max_visual_tokens * px}
-            self._processors[max_visual_tokens] = AutoProcessor.from_pretrained(self.hf, size=size)
+            self._processors[max_visual_tokens] = AutoProcessor.from_pretrained(
+                self.hf, **processor_kwargs(self.spec, max_visual_tokens))
         return self._processors[max_visual_tokens]
+
+    def stream(self, image_paths: list[Path], prompt: str, max_visual_tokens: int = 1024,
+               max_new_tokens: int | None = None):
+        """Like generate(), but yields the answer piece by piece while the model writes it.
+        Stop iterating to stop reading (the generation thread finishes its current call).
+        Greedy decoding only. Not used by the benchmark; see approaches/speculative.py."""
+        import threading
+        from transformers import TextIteratorStreamer
+        images = load_images(image_paths)
+        proc = self.processor(max_visual_tokens)
+        content = []
+        for k in range(len(images)):
+            content += [{'type': 'text', 'text': f'View {k + 1}:'}, {'type': 'image'}]
+        content.append({'type': 'text', 'text': prompt})
+        messages = []
+        if self.spec.get('system'):
+            messages.append({'role': 'system', 'content': [{'type': 'text', 'text': self.spec['system']}]})
+        messages.append({'role': 'user', 'content': content})
+        text = proc.apply_chat_template(messages, tokenize=False, add_generation_prompt=True,
+                                        **template_kwargs(self.spec))
+        inputs = proc(text=[text], images=images or None, padding=True, return_tensors='pt')
+        inputs.pop('token_type_ids', None)
+        inputs = inputs.to(self.model.device)
+        gc = copy.deepcopy(self.model.generation_config)
+        gc.num_beams, gc.use_cache = 1, True
+        gc.max_new_tokens = max_new_tokens or self.spec.get('max_new_tokens', 1536)
+        gc.do_sample, gc.temperature, gc.top_p, gc.top_k = False, None, None, None
+        streamer = TextIteratorStreamer(proc.tokenizer, skip_prompt=True, skip_special_tokens=True)
+
+        def work():
+            with self.torch.inference_mode():
+                self.model.generate(**inputs, generation_config=gc, streamer=streamer)
+        threading.Thread(target=work, daemon=True).start()
+        yield from streamer
 
     def generate(self, image_paths: list[Path], prompt: str, max_visual_tokens: int = 1024,
                  max_new_tokens: int | None = None, sample: bool = False, context=None) -> dict:
@@ -83,7 +154,8 @@ class HFVLM:
         if self.spec.get('system'):
             messages.append({'role': 'system', 'content': [{'type': 'text', 'text': self.spec['system']}]})
         messages.append({'role': 'user', 'content': content})
-        text = proc.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        text = proc.apply_chat_template(messages, tokenize=False, add_generation_prompt=True,
+                                        **template_kwargs(self.spec))
         inputs = proc(text=[text], images=images or None, padding=True, return_tensors='pt')
         inputs.pop('token_type_ids', None)
         visual_tokens = None

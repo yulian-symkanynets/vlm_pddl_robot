@@ -40,5 +40,25 @@
     ]
   },
   "instruction": "Put the blue cylinder on the yellow block and the green block on the red cylinder, but do not put anything on the table.",
-  "_expected": "constraints no_table; red parked on purple_cylinder, never on the table"
+  "_expected": "constraints no_table; red parked on purple_cylinder, never on the table",
+  "_check": {
+    "status": "ok",
+    "on": [
+      [
+        "blue_cylinder",
+        "yellow_block"
+      ],
+      [
+        "green_block",
+        "red_cylinder"
+      ]
+    ],
+    "constraints": {
+      "no_table": true
+    },
+    "no_place_on": [
+      "table"
+    ],
+    "max_moves": 3
+  }
 }

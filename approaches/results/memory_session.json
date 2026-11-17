@@ -1,0 +1,48 @@
+{
+ "requests": 50,
+ "statuses": {
+  "clarify": 15,
+  "no_plan": 3,
+  "ok": 32
+ },
+ "model_calls_without_database": 58,
+ "model_calls_made": 31,
+ "model_calls": {
+  "ow_perceive": 4,
+  "ow_goal": 27
+ },
+ "database": {
+  "path": "docs/example_run/experience.sqlite",
+  "model": "mock",
+  "examples": 0,
+  "bytes": 28672,
+  "stored": {
+   "scene": {
+    "entries": 4,
+    "hits_all_time": 4
+   },
+   "goal": {
+    "entries": 9,
+    "hits_all_time": 23
+   },
+   "plan": {
+    "entries": 9,
+    "hits_all_time": 23
+   }
+  },
+  "this_run": {
+   "scene": {
+    "hits": 4,
+    "misses": 4
+   },
+   "goal": {
+    "hits": 23,
+    "misses": 27
+   },
+   "plan": {
+    "hits": 23,
+    "misses": 9
+   }
+  }
+ }
+}

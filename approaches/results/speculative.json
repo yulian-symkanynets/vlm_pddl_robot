@@ -1,0 +1,62 @@
+{
+ "thinking=0 gate=none": {
+  "valid": 161,
+  "of": 200,
+  "extra_moves_total": 81,
+  "plans_with_extra_moves": 41,
+  "first_move_s": 0.12,
+  "plan_complete_s": 0.6522,
+  "wait_for_full_answer_s": 0.6522,
+  "illegal_moves_sent": 69
+ },
+ "thinking=0 gate=legal": {
+  "valid": 200,
+  "of": 200,
+  "extra_moves_total": 145,
+  "plans_with_extra_moves": 80,
+  "first_move_s": 0.12,
+  "plan_complete_s": 0.618,
+  "wait_for_full_answer_s": 0.6522,
+  "illegal_moves_sent": 0
+ },
+ "thinking=0 gate=optimal": {
+  "valid": 200,
+  "of": 200,
+  "extra_moves_total": 0,
+  "plans_with_extra_moves": 0,
+  "first_move_s": 0.12,
+  "plan_complete_s": 0.5484,
+  "wait_for_full_answer_s": 0.6522,
+  "illegal_moves_sent": 0
+ },
+ "thinking=400 gate=none": {
+  "valid": 161,
+  "of": 200,
+  "extra_moves_total": 81,
+  "plans_with_extra_moves": 41,
+  "first_move_s": 16.2,
+  "plan_complete_s": 16.7322,
+  "wait_for_full_answer_s": 16.7322,
+  "illegal_moves_sent": 69
+ },
+ "thinking=400 gate=legal": {
+  "valid": 200,
+  "of": 200,
+  "extra_moves_total": 145,
+  "plans_with_extra_moves": 80,
+  "first_move_s": 16.2,
+  "plan_complete_s": 16.698,
+  "wait_for_full_answer_s": 16.7322,
+  "illegal_moves_sent": 0
+ },
+ "thinking=400 gate=optimal": {
+  "valid": 200,
+  "of": 200,
+  "extra_moves_total": 0,
+  "plans_with_extra_moves": 0,
+  "first_move_s": 16.2,
+  "plan_complete_s": 16.6284,
+  "wait_for_full_answer_s": 16.7322,
+  "illegal_moves_sent": 0
+ }
+}

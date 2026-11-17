@@ -1,0 +1,9 @@
+<!doctype html><meta charset='utf-8'><title>Planning server runs</title>
+<style>body{font-family:system-ui,sans-serif;max-width:900px;margin:24px auto;padding:0 16px;color:#0b0b0b;background:#fcfcfb}img{max-width:100%;border:1px solid #e4e3df;margin:6px 0 18px}td,th{padding:3px 10px;border-bottom:1px solid #e4e3df;text-align:left;font-size:14px}h2{font-size:17px;margin-top:26px}p{color:#52514e}</style>
+<h1>Planning server runs</h1>
+<table><tr><th>requests</th><td>50</td></tr><tr><th>ok</th><td>32</td></tr><tr><th>median total</th><td>0.04 s</td></tr><tr><th>95th percentile</th><td>0.15 s</td></tr><tr><th>model</th><td>mock</td></tr><tr><th>database on</th><td>50 requests</td></tr><tr><th>answered from the database</th><td>perception 4, goal 23, plan 23</td></tr></table>
+<h2>Time per request</h2><p>Blue perception (image to scene), orange goal (instruction to goal), green planning, grey everything else. Labels: time of the request, path, resolution, and whether the database answered.</p><img src='stages.png'>
+<h2>Average time by kind of request</h2><p></p><img src='by_type.png'>
+<h2>Answered from the experience database</h2><p>Each answered perception or goal call is one model call that did not run.</p><img src='memory.png'>
+<h2>Image resolution</h2><p>Perception time of image requests, by the resolution that was finally used.</p><img src='resolution.png'>
+<h2>Outcomes</h2><p></p><img src='outcomes.png'>

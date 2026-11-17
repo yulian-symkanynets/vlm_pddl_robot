@@ -46,5 +46,20 @@
     ]
   },
   "instruction": "Polož modrý valec na žltú kocku a zelenú kocku na červený valec.",
-  "_expected": "same as 01, in Slovak"
+  "_expected": "same as 01, in Slovak",
+  "_check": {
+    "status": "ok",
+    "on": [
+      [
+        "blue_cylinder",
+        "yellow_block"
+      ],
+      [
+        "green_block",
+        "red_cylinder"
+      ]
+    ],
+    "constraints": {},
+    "max_moves": 3
+  }
 }

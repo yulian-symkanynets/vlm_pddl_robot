@@ -9,6 +9,19 @@
 # Any other image-text-to-text model that works with AutoModelForImageTextToText + AutoProcessor
 # and a chat template can be added the same way (e.g. InternVL3.5-HF, Gemma 3, Llama 3.2 Vision).
 
+# Optional fields for newer model families (see vlm.py):
+#   auto_class          : image-text-to-text (default) | multimodal-lm   (Qwen3.5, LFM2.5 cards use the latter;
+#                         the other class is tried automatically if the first does not know the model)
+#   processor_size      : qwen (default: pixel budget as Qwen-VL reads it) | none (only the server's resizing)
+#   processor_kwargs    : passed to AutoProcessor.from_pretrained unchanged
+#   chat_template_kwargs: e.g. {enable_thinking: false} for models that think by default
+#
+# Faster models (added 2026-11-16, NOT yet run on the GPU machine; VRAM numbers are rough estimates).
+# Small models are usually fastest in bf16: 4-bit weights save memory but add work on every token,
+# and a 2B model fits easily into the RTX A4500 (20 GB). Try:  ./serve.sh start qwen3-vl-2b bf16
+# Requirements: Qwen3-VL-2B works with the transformers already installed. Qwen3.5 needs the newest
+# transformers (the model cards say: install from the main branch); LFM2.5-VL needs transformers >= 5.1.
+
 models:
   qwen3-vl-4b:
     hf: Qwen/Qwen3-VL-4B-Instruct
@@ -50,3 +63,44 @@ models:
       <answer>
       your answer
       </answer>.
+
+  # ---------------------------------------------------------------- faster, smaller models
+  qwen3-vl-2b:                       # same family and loader as qwen3-vl-4b/8b: the safest first try
+    hf: Qwen/Qwen3-VL-2B-Instruct
+    patch: 32
+    max_new_tokens: 1536
+    vram_4bit_gb: 3
+
+  qwen3.5-2b:                        # newer (March 2026), natively multimodal; non-thinking by default
+    hf: Qwen/Qwen3.5-2B
+    auto_class: multimodal-lm
+    patch: 32
+    chat_template_kwargs: {enable_thinking: false}
+    max_new_tokens: 1536
+    vram_4bit_gb: 3
+
+  qwen3.5-4b:                        # thinks by default; thinking switched off here to keep it fast
+    hf: Qwen/Qwen3.5-4B
+    auto_class: multimodal-lm
+    patch: 32
+    chat_template_kwargs: {enable_thinking: false}
+    max_new_tokens: 1536
+    vram_4bit_gb: 5
+
+  qwen3.5-0.8b:                      # smallest; the card limits it to prototyping and fine-tuning
+    hf: Qwen/Qwen3.5-0.8B
+    auto_class: multimodal-lm
+    patch: 32
+    chat_template_kwargs: {enable_thinking: false}
+    max_new_tokens: 1536
+    vram_4bit_gb: 2
+
+  lfm2.5-vl-1.6b:                    # Liquid AI, built for speed; reads 512 px tiles (license: lfm1.0)
+    hf: LiquidAI/LFM2.5-VL-1.6B
+    auto_class: image-text-to-text
+    processor_size: none             # its own tiling; the server's resolution setting limits the pixels
+    processor_kwargs: {min_image_tokens: 64, max_image_tokens: 256, do_image_splitting: true}
+    patch: 32
+    max_new_tokens: 1536
+    vram_4bit_gb: 2
+

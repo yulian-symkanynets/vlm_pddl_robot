@@ -46,5 +46,8 @@
     ]
   },
   "instruction": "Put the black cube on the red cylinder.",
-  "_expected": "clarify: there is no black cube"
+  "_expected": "clarify: there is no black cube",
+  "_check": {
+    "status": "clarify"
+  }
 }

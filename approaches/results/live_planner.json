@@ -1,0 +1,162 @@
+[
+ {
+  "n": 5,
+  "opt_s": 0.14,
+  "opt_moves": 4,
+  "sat_s": 0.13,
+  "sat_moves": 4,
+  "lower_bound": 4
+ },
+ {
+  "n": 5,
+  "opt_s": 0.11,
+  "opt_moves": 5,
+  "sat_s": 0.11,
+  "sat_moves": 5,
+  "lower_bound": 5
+ },
+ {
+  "n": 5,
+  "opt_s": 0.12,
+  "opt_moves": 5,
+  "sat_s": 0.11,
+  "sat_moves": 5,
+  "lower_bound": 5
+ },
+ {
+  "n": 5,
+  "opt_s": 0.11,
+  "opt_moves": 5,
+  "sat_s": 0.11,
+  "sat_moves": 5,
+  "lower_bound": 5
+ },
+ {
+  "n": 5,
+  "opt_s": 0.14,
+  "opt_moves": 5,
+  "sat_s": 0.11,
+  "sat_moves": 5,
+  "lower_bound": 5
+ },
+ {
+  "n": 7,
+  "opt_s": 0.13,
+  "opt_moves": 7,
+  "sat_s": 0.12,
+  "sat_moves": 7,
+  "lower_bound": 7
+ },
+ {
+  "n": 7,
+  "opt_s": 0.13,
+  "opt_moves": 6,
+  "sat_s": 0.12,
+  "sat_moves": 6,
+  "lower_bound": 6
+ },
+ {
+  "n": 7,
+  "opt_s": 0.57,
+  "opt_moves": 7,
+  "sat_s": 0.12,
+  "sat_moves": 7,
+  "lower_bound": 7
+ },
+ {
+  "n": 7,
+  "opt_s": 0.13,
+  "opt_moves": 7,
+  "sat_s": 0.13,
+  "sat_moves": 7,
+  "lower_bound": 7
+ },
+ {
+  "n": 7,
+  "opt_s": 0.12,
+  "opt_moves": 7,
+  "sat_s": 0.13,
+  "sat_moves": 7,
+  "lower_bound": 7
+ },
+ {
+  "n": 9,
+  "opt_s": 5.02,
+  "opt_moves": null,
+  "sat_s": 0.14,
+  "sat_moves": 8,
+  "lower_bound": 8
+ },
+ {
+  "n": 9,
+  "opt_s": 5.04,
+  "opt_moves": null,
+  "sat_s": 0.15,
+  "sat_moves": 9,
+  "lower_bound": 9
+ },
+ {
+  "n": 9,
+  "opt_s": 0.15,
+  "opt_moves": 9,
+  "sat_s": 0.14,
+  "sat_moves": 9,
+  "lower_bound": 9
+ },
+ {
+  "n": 9,
+  "opt_s": 5.02,
+  "opt_moves": null,
+  "sat_s": 0.14,
+  "sat_moves": 9,
+  "lower_bound": 9
+ },
+ {
+  "n": 9,
+  "opt_s": 0.15,
+  "opt_moves": 8,
+  "sat_s": 0.14,
+  "sat_moves": 8,
+  "lower_bound": 8
+ },
+ {
+  "n": 11,
+  "opt_s": 0.21,
+  "opt_moves": 11,
+  "sat_s": 0.16,
+  "sat_moves": 11,
+  "lower_bound": 11
+ },
+ {
+  "n": 11,
+  "opt_s": 1.94,
+  "opt_moves": 10,
+  "sat_s": 0.16,
+  "sat_moves": 10,
+  "lower_bound": 10
+ },
+ {
+  "n": 11,
+  "opt_s": 0.19,
+  "opt_moves": 9,
+  "sat_s": 0.16,
+  "sat_moves": 9,
+  "lower_bound": 9
+ },
+ {
+  "n": 11,
+  "opt_s": 5.02,
+  "opt_moves": null,
+  "sat_s": 0.16,
+  "sat_moves": 11,
+  "lower_bound": 11
+ },
+ {
+  "n": 11,
+  "opt_s": 5.02,
+  "opt_moves": null,
+  "sat_s": 0.16,
+  "sat_moves": 10,
+  "lower_bound": 10
+ }
+]

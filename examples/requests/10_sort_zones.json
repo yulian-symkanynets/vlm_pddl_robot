@@ -46,5 +46,28 @@
     ]
   },
   "instruction": "Sort the objects onto the paper of their own colour.",
-  "_expected": "each object in its colour zone"
+  "_expected": "each object in its colour zone",
+  "_check": {
+    "status": "ok",
+    "in": [
+      [
+        "red_cylinder",
+        "red_zone"
+      ],
+      [
+        "yellow_block",
+        "yellow_zone"
+      ],
+      [
+        "green_block",
+        "green_zone"
+      ],
+      [
+        "blue_cylinder",
+        "blue_zone"
+      ]
+    ],
+    "constraints": {},
+    "max_moves": 4
+  }
 }

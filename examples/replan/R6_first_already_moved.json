@@ -1,0 +1,65 @@
+{
+  "first_request": "05_first_green.json",
+  "what_changed": "A person already moved the green block into the green zone, so 'first move the green block' is done.",
+  "scene_after": {
+    "objects": [
+      {
+        "id": "red_cylinder",
+        "color": "red",
+        "shape": "cylinder",
+        "on": "yellow_block"
+      },
+      {
+        "id": "yellow_block",
+        "color": "yellow",
+        "shape": "block",
+        "on": "table"
+      },
+      {
+        "id": "green_block",
+        "color": "green",
+        "shape": "block",
+        "on": "green_zone"
+      },
+      {
+        "id": "blue_cylinder",
+        "color": "blue",
+        "shape": "cylinder",
+        "on": "table"
+      }
+    ],
+    "zones": [
+      {
+        "id": "green_zone",
+        "color": "green"
+      },
+      {
+        "id": "blue_zone",
+        "color": "blue"
+      },
+      {
+        "id": "yellow_zone",
+        "color": "yellow"
+      },
+      {
+        "id": "red_zone",
+        "color": "red"
+      }
+    ]
+  },
+  "_check": {
+    "decision": "replanned",
+    "status": "ok",
+    "on": [
+      [
+        "blue_cylinder",
+        "yellow_block"
+      ],
+      [
+        "green_block",
+        "red_cylinder"
+      ]
+    ],
+    "max_moves": 3
+  }
+}

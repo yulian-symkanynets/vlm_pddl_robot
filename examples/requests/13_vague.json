@@ -46,5 +46,8 @@
     ]
   },
   "instruction": "Rearrange these blocks.",
-  "_expected": "clarify: the final arrangement is not said"
+  "_expected": "clarify: the final arrangement is not said",
+  "_check": {
+    "status": "clarify"
+  }
 }

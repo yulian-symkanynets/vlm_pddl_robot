@@ -2,3 +2,7 @@
 __pycache__/
 results/*/
 logs/
+
+# example session for docs/system_guide.pdf: only the charts are needed in git
+docs/example_run/requests/
+docs/example_run/experience.sqlite

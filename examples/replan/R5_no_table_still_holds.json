@@ -1,0 +1,65 @@
+{
+  "first_request": "03_three_stacks_no_table.json",
+  "what_changed": "A person moved the purple cylinder to the table. The rule 'do not put anything on the table' must still hold.",
+  "scene_after": {
+    "objects": [
+      {
+        "id": "red_cylinder",
+        "color": "red",
+        "shape": "cylinder",
+        "on": "yellow_block"
+      },
+      {
+        "id": "yellow_block",
+        "color": "yellow",
+        "shape": "block",
+        "on": "table"
+      },
+      {
+        "id": "green_block",
+        "color": "green",
+        "shape": "block",
+        "on": "blue_cylinder"
+      },
+      {
+        "id": "blue_cylinder",
+        "color": "blue",
+        "shape": "cylinder",
+        "on": "table"
+      },
+      {
+        "id": "purple_cylinder",
+        "color": "purple",
+        "shape": "cylinder",
+        "on": "table"
+      },
+      {
+        "id": "orange_block",
+        "color": "orange",
+        "shape": "block",
+        "on": "table"
+      }
+    ]
+  },
+  "_check": {
+    "decision": "replanned",
+    "status": "ok",
+    "on": [
+      [
+        "blue_cylinder",
+        "yellow_block"
+      ],
+      [
+        "green_block",
+        "red_cylinder"
+      ]
+    ],
+    "constraints": {
+      "no_table": true
+    },
+    "no_place_on": [
+      "table"
+    ],
+    "max_moves": 3
+  }
+}

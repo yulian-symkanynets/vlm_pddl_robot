@@ -40,5 +40,20 @@
     ]
   },
   "instruction": "Build one tower: the orange block at the bottom, then the blue cylinder, then the red cylinder on top.",
-  "_expected": "goal: blue on orange, red on blue"
+  "_expected": "goal: blue on orange, red on blue",
+  "_check": {
+    "status": "ok",
+    "on": [
+      [
+        "blue_cylinder",
+        "orange_block"
+      ],
+      [
+        "red_cylinder",
+        "blue_cylinder"
+      ]
+    ],
+    "constraints": {},
+    "max_moves": 4
+  }
 }

@@ -1,0 +1,71 @@
+{
+  "first_request": "01_photo_rearrange.json",
+  "what_changed": "A new white block was put on top of the red cylinder; it must be removed first.",
+  "scene_after": {
+    "objects": [
+      {
+        "id": "red_cylinder",
+        "color": "red",
+        "shape": "cylinder",
+        "on": "yellow_block"
+      },
+      {
+        "id": "yellow_block",
+        "color": "yellow",
+        "shape": "block",
+        "on": "table"
+      },
+      {
+        "id": "green_block",
+        "color": "green",
+        "shape": "block",
+        "on": "blue_cylinder"
+      },
+      {
+        "id": "blue_cylinder",
+        "color": "blue",
+        "shape": "cylinder",
+        "on": "table"
+      },
+      {
+        "id": "white_block",
+        "color": "white",
+        "shape": "block",
+        "on": "red_cylinder"
+      }
+    ],
+    "zones": [
+      {
+        "id": "green_zone",
+        "color": "green"
+      },
+      {
+        "id": "blue_zone",
+        "color": "blue"
+      },
+      {
+        "id": "yellow_zone",
+        "color": "yellow"
+      },
+      {
+        "id": "red_zone",
+        "color": "red"
+      }
+    ]
+  },
+  "_check": {
+    "decision": "replanned",
+    "status": "ok",
+    "on": [
+      [
+        "blue_cylinder",
+        "yellow_block"
+      ],
+      [
+        "green_block",
+        "red_cylinder"
+      ]
+    ],
+    "max_moves": 4
+  }
+}

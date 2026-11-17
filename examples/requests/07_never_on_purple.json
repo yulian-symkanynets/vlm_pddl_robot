@@ -40,5 +40,26 @@
     ]
   },
   "instruction": "Put the green block on the yellow block and never put anything on the purple cylinder.",
-  "_expected": "constraints never_on [*, purple_cylinder]; nothing placed on purple"
+  "_expected": "constraints never_on [*, purple_cylinder]; nothing placed on purple",
+  "_check": {
+    "status": "ok",
+    "on": [
+      [
+        "green_block",
+        "yellow_block"
+      ]
+    ],
+    "constraints": {
+      "never_on": [
+        [
+          "*",
+          "purple_cylinder"
+        ]
+      ]
+    },
+    "no_place_on": [
+      "purple_cylinder"
+    ],
+    "max_moves": 2
+  }
 }

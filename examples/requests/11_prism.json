@@ -22,5 +22,11 @@
     ]
   },
   "instruction": "Put the red block on the green prism.",
-  "_expected": "no_plan or clarify: nothing can stand on a prism"
+  "_expected": "no_plan or clarify: nothing can stand on a prism",
+  "_check": {
+    "status": [
+      "no_plan",
+      "clarify"
+    ]
+  }
 }

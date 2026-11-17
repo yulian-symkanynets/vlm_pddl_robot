@@ -1,0 +1,64 @@
+{
+  "first_request": "01_photo_rearrange.json",
+  "what_changed": "A person did the whole task by hand: nothing is left to do.",
+  "scene_after": {
+    "objects": [
+      {
+        "id": "red_cylinder",
+        "color": "red",
+        "shape": "cylinder",
+        "on": "table"
+      },
+      {
+        "id": "yellow_block",
+        "color": "yellow",
+        "shape": "block",
+        "on": "table"
+      },
+      {
+        "id": "green_block",
+        "color": "green",
+        "shape": "block",
+        "on": "red_cylinder"
+      },
+      {
+        "id": "blue_cylinder",
+        "color": "blue",
+        "shape": "cylinder",
+        "on": "yellow_block"
+      }
+    ],
+    "zones": [
+      {
+        "id": "green_zone",
+        "color": "green"
+      },
+      {
+        "id": "blue_zone",
+        "color": "blue"
+      },
+      {
+        "id": "yellow_zone",
+        "color": "yellow"
+      },
+      {
+        "id": "red_zone",
+        "color": "red"
+      }
+    ]
+  },
+  "_check": {
+    "status": "ok",
+    "on": [
+      [
+        "blue_cylinder",
+        "yellow_block"
+      ],
+      [
+        "green_block",
+        "red_cylinder"
+      ]
+    ],
+    "max_moves": 0
+  }
+}

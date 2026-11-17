@@ -40,5 +40,20 @@
     ]
   },
   "instruction": "Put the blue cylinder on the yellow block and the green block on the red cylinder.",
-  "_expected": "red goes onto the table (allowed here)"
+  "_expected": "red goes onto the table (allowed here)",
+  "_check": {
+    "status": "ok",
+    "on": [
+      [
+        "blue_cylinder",
+        "yellow_block"
+      ],
+      [
+        "green_block",
+        "red_cylinder"
+      ]
+    ],
+    "constraints": {},
+    "max_moves": 3
+  }
 }

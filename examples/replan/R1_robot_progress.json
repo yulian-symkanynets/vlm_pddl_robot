@@ -1,0 +1,20 @@
+{
+  "first_request": "01_photo_rearrange.json",
+  "what_changed": "The robot already did the first move of the plan (whatever the planner chose). Nothing else changed.",
+  "scene_after": "AFTER_FIRST_MOVE",
+  "_check": {
+    "decision": "kept",
+    "status": "ok",
+    "on": [
+      [
+        "blue_cylinder",
+        "yellow_block"
+      ],
+      [
+        "green_block",
+        "red_cylinder"
+      ]
+    ],
+    "max_moves": 2
+  }
+}

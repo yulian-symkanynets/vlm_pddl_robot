@@ -40,5 +40,20 @@
     ]
   },
   "instruction": "Swap where things are so the blue cylinder ends on the yellow block; keep the table free while you do it.",
-  "_expected": "different wording for no_table: model should still give no_table"
+  "_expected": "different wording for no_table: model should still give no_table",
+  "_check": {
+    "status": "ok",
+    "on": [
+      [
+        "blue_cylinder",
+        "yellow_block"
+      ]
+    ],
+    "constraints": {
+      "no_table": true
+    },
+    "no_place_on": [
+      "table"
+    ]
+  }
 }

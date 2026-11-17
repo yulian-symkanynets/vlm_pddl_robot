@@ -19,3 +19,4 @@ uvicorn
 python-multipart
 requests
 httpx
+matplotlib  # graphs: run_report.py, /dashboard
