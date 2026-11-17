@@ -83,6 +83,18 @@ $ printf 'nameserver 8.8.8.8\nnameserver 1.1.1.1\n' | sudo tee /etc/resolv.conf
 $ printf '[network]\ngenerateResolvConf = false\n' | sudo tee /etc/wsl.conf     # keep it after restarts
 ```
 
+## Why the first start of a model takes long
+
+* **First start of a model downloads it** (2B about 4-5 GB, 8B about 17 GB). The log says
+  `NOT in the local cache. Downloading about N GB once` and `./serve.sh start` shows the progress line.
+  Download in advance, while nothing else runs: `python download_models.py qwen3-vl-2b qwen3-vl-8b`.
+* **Later starts load from the cache without any network check** (log: `found in the local cache`),
+  so a slow or broken network no longer delays the start.
+* **4-bit models are quantized while loading**: about 1-2 minutes for 8B at every start. That is
+  normal. Small models in `bf16` skip this step.
+* Which models are downloaded: `python check_env.py`. Where: `~/.cache/huggingface` (set `HF_HOME`
+  to use another disk).
+
 ## Which model (faster ones)
 
 All models are listed in `models.yaml`; start any of them with `./serve.sh start <key> <quant>`.

@@ -54,3 +54,17 @@ def test_model_comparison_chart(tmp_path, monkeypatch):
                      "mean_image_tokens": 900}}}))
     monkeypatch.setattr(run_report, "ROOT", tmp_path)
     assert run_report.chart_models(tmp_path) and (tmp_path / "models.png").exists()
+
+
+def test_cache_check_needs_config_and_every_weight_shard(tmp_path, monkeypatch):
+    hub = pytest.importorskip("huggingface_hub")
+    import vlm
+    index = tmp_path / "model.safetensors.index.json"
+    index.write_text(json.dumps({"weight_map": {"a": "model-00001.safetensors", "b": "model-00002.safetensors"}}))
+    files = {"config.json": "x", "model.safetensors.index.json": str(index), "model-00001.safetensors": "x"}
+    monkeypatch.setattr(hub, "try_to_load_from_cache", lambda repo, f: files.get(f))
+    assert not vlm.weights_cached("org/model")                 # one shard still missing: download needed
+    files["model-00002.safetensors"] = "x"
+    assert vlm.weights_cached("org/model")                     # everything there: load offline
+    files.pop("config.json")
+    assert not vlm.weights_cached("org/model")

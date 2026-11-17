@@ -19,13 +19,18 @@ case "${1:-help}" in
       nohup python server.py >> "$LOG" 2>&1 &
     echo $! > "$PID"
     echo "started pid $! (model ${2:-${MODEL:-qwen3-vl-8b}}), log: $LOG"
-    echo -n "waiting for the model to load "
-    for _ in $(seq 1 300); do
-      if curl -s "http://localhost:$PORT/health" >/dev/null; then echo; echo "ready: http://localhost:$PORT/docs"; exit 0; fi
+    echo "waiting for the model (a first start downloads it; the line below shows the progress)"
+    START=$(wc -c < "$LOG")
+    for i in $(seq 1 1800); do                       # up to one hour: a first download can be large
+      if curl -s "http://localhost:$PORT/health" >/dev/null; then
+        printf '\r%-110s\n' ""; echo "ready after $((i * 2)) s: http://localhost:$PORT/docs"; exit 0; fi
       if ! running; then echo; echo "server exited, last log lines:"; tail -n 30 "$LOG"; exit 1; fi
-      echo -n "."; sleep 2
+      # newest line of THIS start (download bars use \r, so split on it too)
+      last=$(tail -c +"$((START + 1))" "$LOG" | tail -c 400 | tr '\r' '\n' | grep -v '^[[:space:]]*$' | tail -n 1)
+      printf '\r[%4ss] %-100.100s' "$((i * 2))" "${last:-loading}"
+      sleep 2
     done
-    echo; echo "still loading, check: ./serve.sh logs" ;;
+    echo; echo "still not ready after an hour, check: ./serve.sh logs" ;;
   stop)
     if running; then kill "$(cat $PID)" && rm -f "$PID" && echo stopped; else echo "not running"; rm -f "$PID"; fi ;;
   restart)

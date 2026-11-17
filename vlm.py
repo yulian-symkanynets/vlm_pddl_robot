@@ -54,6 +54,33 @@ def template_kwargs(spec: dict) -> dict:
     return dict(spec.get('chat_template_kwargs') or {})
 
 
+def weights_cached(repo: str) -> bool:
+    """True if config and every weight file of the model are already in the local HF cache.
+    Then the model is loaded with local_files_only: no network checks at start-up (which can
+    take minutes on a network with slow DNS) and no surprise downloads."""
+    try:
+        from huggingface_hub import try_to_load_from_cache
+    except ImportError:
+        return False
+    if not isinstance(try_to_load_from_cache(repo, 'config.json'), str):
+        return False
+    index = try_to_load_from_cache(repo, 'model.safetensors.index.json')
+    if isinstance(index, str):
+        shards = set(json.loads(Path(index).read_text())['weight_map'].values())
+        return all(isinstance(try_to_load_from_cache(repo, f), str) for f in shards)
+    return isinstance(try_to_load_from_cache(repo, 'model.safetensors'), str)
+
+
+def download_size_gb(repo: str) -> float | None:
+    """Size of the weight files on the Hub (only asked when the model still has to be downloaded)."""
+    try:
+        from huggingface_hub import HfApi
+        info = HfApi().model_info(repo, files_metadata=True, timeout=15)
+        return sum(f.size or 0 for f in info.siblings if f.rfilename.endswith('.safetensors')) / 1e9
+    except Exception:                                    # no network, private, old library: not important
+        return None
+
+
 class HFVLM:
     """One loaded model. Load once, call generate() many times."""
 
@@ -75,6 +102,14 @@ class HFVLM:
             qc = BitsAndBytesConfig(load_in_8bit=True)
         elif quant != 'bf16':
             raise ValueError(f'unknown quant {quant}')
+        self.local_only = weights_cached(self.hf)
+        if self.local_only:
+            print(f'{self.hf}: found in the local cache, loading without network checks', flush=True)
+        else:
+            gb = download_size_gb(self.hf)
+            print(f'{self.hf}: NOT in the local cache. Downloading '
+                  f'{f"about {gb:.1f} GB " if gb else ""}once (progress below; next starts are faster). '
+                  f'To download in advance: python download_models.py {key}', flush=True)
         torch.cuda.reset_peak_memory_stats()
         t0 = time.perf_counter()
         errors = []
@@ -84,8 +119,17 @@ class HFVLM:
                 errors.append(f'{name}: not in transformers {transformers.__version__}')
                 continue
             try:
-                self.model = cls.from_pretrained(self.hf, dtype=dtype, device_map={'': 0}, quantization_config=qc,
-                                                 attn_implementation='sdpa').eval()
+                try:
+                    self.model = cls.from_pretrained(self.hf, dtype=dtype, device_map={'': 0}, quantization_config=qc,
+                                                     attn_implementation='sdpa',
+                                                     local_files_only=self.local_only).eval()
+                except OSError:
+                    if not self.local_only:
+                        raise
+                    print(f'{self.hf}: a file is missing from the cache, fetching it', flush=True)
+                    self.local_only = False
+                    self.model = cls.from_pretrained(self.hf, dtype=dtype, device_map={'': 0}, quantization_config=qc,
+                                                     attn_implementation='sdpa').eval()
                 break
             except (ValueError, KeyError) as e:          # this Auto class does not know the architecture
                 errors.append(f'{name}: {e}')
@@ -101,8 +145,12 @@ class HFVLM:
     def processor(self, max_visual_tokens: int):
         if max_visual_tokens not in self._processors:
             from transformers import AutoProcessor
-            self._processors[max_visual_tokens] = AutoProcessor.from_pretrained(
-                self.hf, **processor_kwargs(self.spec, max_visual_tokens))
+            kw = processor_kwargs(self.spec, max_visual_tokens)
+            try:
+                self._processors[max_visual_tokens] = AutoProcessor.from_pretrained(
+                    self.hf, local_files_only=getattr(self, 'local_only', False), **kw)
+            except OSError:                              # a processor file not cached yet: fetch it once
+                self._processors[max_visual_tokens] = AutoProcessor.from_pretrained(self.hf, **kw)
         return self._processors[max_visual_tokens]
 
     def stream(self, image_paths: list[Path], prompt: str, max_visual_tokens: int = 1024,
