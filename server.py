@@ -453,7 +453,9 @@ def main():
     ap.add_argument('--max-visual-tokens', type=int, default=int(os.environ.get('MAX_VISUAL_TOKENS', 1024)))
     ap.add_argument('--memory', default=os.environ.get('MEMORY', str(ROOT / 'logs' / 'experience.sqlite')),
                     help='experience database file (scene, goal and plan answers of earlier requests)')
-    ap.add_argument('--no-memory', action='store_true', help='switch the experience database off')
+    ap.add_argument('--no-memory', action='store_true',
+                    default=os.environ.get('NO_MEMORY', '') not in ('', '0'),
+                    help='switch the experience database off (or set NO_MEMORY=1)')
     ap.add_argument('--memory-examples', type=int, default=int(os.environ.get('MEMORY_EXAMPLES', 0)),
                     help='put this many similar earlier instructions into the goal prompt (0 = off)')
     args = ap.parse_args()

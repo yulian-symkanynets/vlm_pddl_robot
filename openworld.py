@@ -561,8 +561,11 @@ def plan_for(sc: dict, goal, planner: str = 'auto', constraints: dict | None = N
             acts = [(a, list(args)) for a, args in hit['acts']]
             status, used = hit['status'], hit['planner']
             dt = time.perf_counter() - t_mem
-        elif stack and planner == 'auto' and not cons and not sc['hidden'] \
-                and (cs := colour_stack_plan(sc)) is not None:
+        elif stack and planner == 'auto' and not sc['hidden']:
+            cs = colour_stack_plan(sc) if not cons else None
+            if cs is None:       # too many objects for the exact search (about 20), or constraints:
+                import goal_logic          # the general search handles both and is much faster than PDDL here
+                return plan_formula(sc, json.dumps(goal_logic.STACK_BY_COLOUR, sort_keys=True), cons)
             status, acts, dt, used = cs
         else:
             if planner == 'auto':
@@ -657,7 +660,7 @@ def colour_stack_plan(sc: dict):
     goal check, or None when the scene is outside its scope (objects in zones, no colour)."""
     import colour_stacks
     colour = {x: d.get('color') for x, d in sc['items'].items()}
-    if not all(colour.values()):
+    if not all(colour.values()) or len(colour) > 18:      # measured: exact search is quick up to ~16-18 objects
         return None
     t0 = time.perf_counter()
     moves, optimal = colour_stacks.solve(sc['support'], colour)

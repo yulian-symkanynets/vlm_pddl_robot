@@ -83,6 +83,12 @@ $ printf 'nameserver 8.8.8.8\nnameserver 1.1.1.1\n' | sudo tee /etc/resolv.conf
 $ printf '[network]\ngenerateResolvConf = false\n' | sudo tee /etc/wsl.conf     # keep it after restarts
 ```
 
+## Live benchmark
+
+`python live_bench.py --quick` measures the running server with real requests (JSON tasks, scene
+sizes, photos at every resolution, novel and refused tasks) and writes graphs and `report.html`.
+`scripts/live_compare.sh` does it for several models. Details: `docs/LIVE_BENCH.md`.
+
 ## API reference
 
 `docs/api.html` (open it in a browser): scene JSON, every endpoint with its fields, responses,

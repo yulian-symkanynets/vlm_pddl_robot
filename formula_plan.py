@@ -6,7 +6,7 @@ free slot. The goal is a test (the formula holds), and the guide is the number o
 of the formula that do not hold yet.
 
 That guide can be too high, so the first plan is not proven shortest. The search therefore starts
-greedy (weight 5), then tries again with lower weights and keeps the shortest plan found. Measured
+greedy (weight 30), then tries again with lower weights and keeps the shortest plan found. Measured
 on the 16-object "every stack one colour" scene: 18 moves in under 0.1 s, against 15 for the
 exact colour_stacks.py search and no plan within 60 s from the general PDDL planner.
 
@@ -21,8 +21,8 @@ import time
 import goal_logic
 from scenes import slot_names
 
-FIRST_WEIGHT = 5
-IMPROVE_WEIGHTS = (3, 2)
+FIRST_WEIGHT = 30                # greedy: a first plan fast, even with 50+ objects
+IMPROVE_WEIGHTS = (10, 5, 3, 2)  # then shorter plans while time allows
 IMPROVE_ROUND_S = 0.4
 LIMIT_S = 8.0                    # an impossible goal is only given up after this long
 

@@ -26,11 +26,22 @@ import itertools
 STATE_ATOMS = {'on': 2, 'on_table': 1, 'in': 2, 'clear': 1, 'above': 2}
 STATIC_ATOMS = {'color': 2, 'shape': 2, 'same_color': 2, 'same_shape': 2, 'is': 2}
 KINDS = {'object': 'object', 'item': 'object', 'place': 'place', 'zone': 'place'}
-MAX_NODES = 40000                # a formula that expands to more than this is refused
+MAX_NODES = 150000               # a formula that expands to more than this is refused
 
 
 class FormulaError(ValueError):
     pass
+
+
+# "every stack one colour" as a formula: the general path for it when the exact search
+# (colour_stacks.py) is too slow, and an example of the language.
+STACK_BY_COLOUR = {"and": [
+    {"forall": {"x": "object"}, "body": {"or": [
+        {"on_table": ["x"]},
+        {"exists": {"y": "object"}, "where": {"same_color": ["x", "y"]}, "body": {"on": ["x", "y"]}}]}},
+    {"forall": {"x": "object", "y": "object"},
+     "where": {"and": [{"same_color": ["x", "y"]}, {"not": {"is": ["x", "y"]}}]},
+     "body": {"not": {"and": [{"on_table": ["x"]}, {"on_table": ["y"]}]}}}]}
 
 
 # --------------------------------------------------------------------------- small boolean algebra

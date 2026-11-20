@@ -1,0 +1,297 @@
+[
+ {
+  "id": "sort",
+  "instruction": "Sort the objects by colour into the zones.",
+  "reference": {
+   "and": [
+    {
+     "in": [
+      "green_bar_1",
+      "green_zone"
+     ]
+    },
+    {
+     "in": [
+      "blue_block_1",
+      "blue_zone"
+     ]
+    },
+    {
+     "in": [
+      "yellow_block_1",
+      "yellow_zone"
+     ]
+    },
+    {
+     "in": [
+      "red_block_1",
+      "red_zone"
+     ]
+    },
+    {
+     "in": [
+      "yellow_bar_1",
+      "yellow_zone"
+     ]
+    },
+    {
+     "in": [
+      "red_bar_1",
+      "red_zone"
+     ]
+    },
+    {
+     "in": [
+      "green_cube_1",
+      "green_zone"
+     ]
+    },
+    {
+     "in": [
+      "blue_block_2",
+      "blue_zone"
+     ]
+    },
+    {
+     "in": [
+      "red_block_2",
+      "red_zone"
+     ]
+    },
+    {
+     "in": [
+      "yellow_cylinder_1",
+      "yellow_zone"
+     ]
+    },
+    {
+     "in": [
+      "green_bar_2",
+      "green_zone"
+     ]
+    },
+    {
+     "in": [
+      "blue_cube_1",
+      "blue_zone"
+     ]
+    },
+    {
+     "in": [
+      "blue_bar_1",
+      "blue_zone"
+     ]
+    },
+    {
+     "in": [
+      "red_cube_1",
+      "red_zone"
+     ]
+    },
+    {
+     "in": [
+      "yellow_bar_2",
+      "yellow_zone"
+     ]
+    },
+    {
+     "in": [
+      "green_cube_2",
+      "green_zone"
+     ]
+    }
+   ]
+  }
+ },
+ {
+  "id": "stack",
+  "instruction": "Rearrange the objects so that every stack is one colour.",
+  "reference": {
+   "and": [
+    {
+     "forall": {
+      "x": "object"
+     },
+     "body": {
+      "or": [
+       {
+        "on_table": [
+         "x"
+        ]
+       },
+       {
+        "exists": {
+         "y": "object"
+        },
+        "where": {
+         "same_color": [
+          "x",
+          "y"
+         ]
+        },
+        "body": {
+         "on": [
+          "x",
+          "y"
+         ]
+        }
+       }
+      ]
+     }
+    },
+    {
+     "forall": {
+      "x": "object",
+      "y": "object"
+     },
+     "where": {
+      "and": [
+       {
+        "same_color": [
+         "x",
+         "y"
+        ]
+       },
+       {
+        "not": {
+         "is": [
+          "x",
+          "y"
+         ]
+        }
+       }
+      ]
+     },
+     "body": {
+      "not": {
+       "and": [
+        {
+         "on_table": [
+          "x"
+         ]
+        },
+        {
+         "on_table": [
+          "y"
+         ]
+        }
+       ]
+      }
+     }
+    }
+   ]
+  }
+ },
+ {
+  "id": "cubes_to_red",
+  "instruction": "Put every cube into the red zone.",
+  "reference": {
+   "forall": {
+    "x": "object"
+   },
+   "where": {
+    "shape": [
+     "x",
+     "cube"
+    ]
+   },
+   "body": {
+    "in": [
+     "x",
+     "red_zone"
+    ]
+   }
+  }
+ },
+ {
+  "id": "red_tower",
+  "instruction": "Build one single tower out of all the red objects.",
+  "reference": {
+   "and": [
+    {
+     "forall": {
+      "x": "object"
+     },
+     "where": {
+      "color": [
+       "x",
+       "red"
+      ]
+     },
+     "body": {
+      "or": [
+       {
+        "on_table": [
+         "x"
+        ]
+       },
+       {
+        "exists": {
+         "y": "object"
+        },
+        "where": {
+         "color": [
+          "y",
+          "red"
+         ]
+        },
+        "body": {
+         "on": [
+          "x",
+          "y"
+         ]
+        }
+       }
+      ]
+     }
+    },
+    {
+     "forall": {
+      "x": "object",
+      "y": "object"
+     },
+     "where": {
+      "and": [
+       {
+        "color": [
+         "x",
+         "red"
+        ]
+       },
+       {
+        "color": [
+         "y",
+         "red"
+        ]
+       },
+       {
+        "not": {
+         "is": [
+          "x",
+          "y"
+         ]
+        }
+       }
+      ]
+     },
+     "body": {
+      "not": {
+       "and": [
+        {
+         "on_table": [
+          "x"
+         ]
+        },
+        {
+         "on_table": [
+          "y"
+         ]
+        }
+       ]
+      }
+     }
+    }
+   ]
+  }
+ }
+]

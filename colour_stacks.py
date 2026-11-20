@@ -58,7 +58,7 @@ def _estimate(stacks, colour) -> int:
     return unsettled + sum(total[c] - best[c] for c in total)
 
 
-def solve(support: dict[str, str], colour: dict[str, str], time_limit_s: float = 10.0):
+def solve(support: dict[str, str], colour: dict[str, str], time_limit_s: float = 3.0):
     """-> (moves [(object, from, to)], optimal) or (None, False). from/to: object id or "table"."""
     start = stacks_of(support, colour)
     if start is None:
