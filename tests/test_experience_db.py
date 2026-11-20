@@ -130,3 +130,29 @@ def test_server_endpoints_and_dashboard(tmp_path):
     assert c.get("/dashboard/files/../../secret.png").status_code == 404
     assert c.post("/memory/clear", params={"kind": "goal"}).json()["deleted"] >= 1
     assert c.get("/memory").json()["stored"]["goal"]["entries"] == 0
+
+
+def test_repeated_ids_and_colour_shape_descriptions():
+    dup = {"objects": [{"id": "red_block", "on": "table"}, {"id": "blue_block", "on": "red_block"},
+                       {"id": "red_block", "on": "blue_block"}]}
+    d = openworld.normalize_scene(dup)
+    assert d["support"] == {"red_block": "table", "blue_block": "red_block", "red_block_2": "blue_block"}
+    both = {"objects": [{"id": "red_block", "on": "table"}, {"id": "red_block", "on": "table"},
+                        {"id": "blue_block", "on": "red_block"}]}
+    assert openworld.normalize_scene(both)["unknown"] == ["blue_block"]      # really ambiguous: ask
+    s = json.loads((ROOT / "examples" / "scenes" / "four_towers_2026-11-20.json").read_text())
+    sc = openworld.normalize_scene(s)
+    assert len(sc["items"]) == 16 and sc["items"]["green_bar_1"]["label"] == "green bar"
+    goal = [{"object": o["id"], "in": f"{o['color']}_zone"} for o in s["objects"]]
+    r = openworld.run(scene=s, goal=goal)
+    assert r["status"] == "ok" and r["quality"]["optimal"] and r["quality"]["moves"] == 16
+
+
+def test_fixed_places_are_added_to_what_the_camera_saw(tmp_path):
+    m = CountingModel()
+    img = tmp_path / "view.jpg"
+    img.write_bytes(PHOTO.read_bytes())
+    zones = [{"id": "purple_zone", "kind": "zone", "capacity": 2}]
+    r = openworld.run(instruction="put the red cylinder in the purple zone", images=[img], vlm=m, places=zones)
+    assert "purple_zone" in r["scene"]["places"][-1]["id"] or any(
+        p["id"] == "purple_zone" for p in r["scene"]["places"])

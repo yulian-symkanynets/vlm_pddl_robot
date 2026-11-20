@@ -72,12 +72,40 @@ class SceneError(ValueError):
     pass
 
 
+COLOURS = ('red', 'yellow', 'blue', 'green', 'orange', 'purple', 'violet', 'pink', 'white', 'black',
+           'brown', 'grey', 'gray', 'cyan', 'magenta')
+
+
+SHAPES = ('cube', 'block', 'bar', 'cylinder', 'ball', 'sphere', 'prism', 'cone', 'disc', 'ring', 'plate')
+
+
+def shape_of(*texts) -> str | None:
+    """The first shape word in an explicit shape field, label or id ("blue_cube_1" -> "cube")."""
+    for t in texts:
+        if t:
+            for w in re.findall(r'[a-z]+', str(t).lower()):
+                if w in SHAPES:
+                    return w
+    return None
+
+
+def colour_of(*texts) -> str | None:
+    """The first colour word in an explicit colour field, label or id ("red_zone" -> "red")."""
+    for t in texts:
+        if t:
+            for w in re.findall(r'[a-z]+', str(t).lower()):
+                if w in COLOURS:
+                    return w
+    return None
+
+
 def normalize_scene(raw: dict) -> dict:
     """Clean a scene abstraction into {items, env, support, hidden, unknown, names, warnings}."""
     if not isinstance(raw, dict):
         raise SceneError('scene must be a JSON object')
     warnings, names = [], Names()
-    inline_support: dict = {}
+    inline_support: dict = {}                        # unique id -> what the object rests on (as written)
+    same_name: dict[str, list[str]] = {}             # id as written -> unique ids (several if repeated)
     used: set[str] = set()
 
     def unique(base: str) -> str:
@@ -96,9 +124,18 @@ def normalize_scene(raw: dict) -> dict:
     items: dict[str, dict] = {}
     for o in objs:
         o = o if isinstance(o, dict) else {'id': o}
-        pid = unique(make_id(o.get('id') or o.get('label') or 'obj'))
-        label = str(o.get('label') or o.get('desc') or pid.replace('_', ' '))
+        written = make_id(o.get('id') or o.get('label') or 'obj')
+        pid = unique(written)
+        same_name.setdefault(written, []).append(pid)
+        described = ' '.join(str(o[k]) for k in ('color', 'shape') if o.get(k))   # "red block"
+        label = str(o.get('label') or o.get('desc') or described or pid.replace('_', ' '))
         d = {'label': label}
+        c = colour_of(o.get('color'), label, pid)
+        if c:
+            d['color'] = c                          # used to expand "sort by colour"
+        sh = shape_of(o.get('shape'), label, pid)
+        if sh:
+            d['shape'] = sh                         # used by goal formulas
         h = o.get('height_mm')
         if isinstance(h, (int, float)) and h > 0:
             d['height_mm'] = float(h)
@@ -106,7 +143,7 @@ def normalize_scene(raw: dict) -> dict:
         names.add(pid, o.get('id'), label)
         sup = next((o[k] for k in ('on', 'on_top_of', 'rests_on', 'in') if isinstance(o.get(k), str)), None)
         if sup is not None:                          # per-object form: {"id": ..., "on": "yellow_block"}
-            inline_support[o.get('id') or pid] = sup
+            inline_support[pid] = sup                # filed under the UNIQUE id (two "red_block"s stay apart)
     if not items:
         raise SceneError('scene has no objects')
 
@@ -127,6 +164,9 @@ def normalize_scene(raw: dict) -> dict:
         if str(p.get('lid', '')).lower() == 'closed':
             is_open = False
         d = {'kind': kind, 'slots': cap, 'open': bool(is_open)}
+        c = colour_of(p.get('color'), p.get('label'), pid)
+        if c:
+            d['color'] = c
         if isinstance(p.get('clearance_mm'), (int, float)):
             d['clearance_mm'] = float(p['clearance_mm'])
         places[pid] = d
@@ -142,19 +182,52 @@ def normalize_scene(raw: dict) -> dict:
                 sup_raw.setdefault(r.get('subject'), r.get('object'))
     if isinstance(sup_raw, list):                    # [{"object": x, "on": y}] form
         sup_raw = {s.get('object'): s.get('on', s.get('in')) for s in sup_raw if isinstance(s, dict)}
-    support, unknown = {}, []
+    support, unknown, ambiguous = {}, [], []
     for k, v in sup_raw.items():
-        x = names.get(k)
+        x = k if k in items else names.get(k)
         if x not in items:
             warnings.append(f'support for unknown object {k!r} ignored')
             continue
         if str(v).strip().lower() in ('unknown', 'none', 'null', '?', ''):
             unknown.append(x)
             continue
-        y = names.get(v)
+        twins = [c for c in same_name.get(make_id(str(v)), []) if c != x]
+        if len(twins) > 1:                           # "on red_block" but there are several red_blocks
+            ambiguous.append((x, v, twins))
+            continue
+        y = twins[0] if twins else names.get(v)
         if y is None:
             raise SceneError(f'{x} rests on unknown {v!r}')
         support[x] = y
+    # Repeated ids: keep only the readings that are physically possible (at most one object on
+    # another, no loops). One possible reading: use it. Several: do not guess, ask for a view.
+    def loops(x, y):
+        seen = {x}
+        while y in items:
+            if y in seen:
+                return True
+            seen.add(y)
+            y = support.get(y)
+        return False
+    progress = True
+    while ambiguous and progress:
+        progress = False
+        for entry in list(ambiguous):
+            x, v, twins = entry
+            carrying = {s for s in support.values() if s in items}
+            ok = [c for c in twins if c not in carrying and not loops(x, c)]
+            if len(ok) == 1:
+                support[x] = ok[0]
+                ambiguous.remove(entry)
+                progress = True
+                warnings.append(f'{x} rests on {v!r}, which names several objects; '
+                                f'only {ok[0]} is physically possible')
+            elif not ok:
+                raise SceneError(f'{x} rests on {v!r}, but no object of that name can carry it')
+    for x, v, twins in ambiguous:
+        unknown.append(x)
+        warnings.append(f'{x} rests on {v!r}, which could be any of {", ".join(twins)}: '
+                        f'give every object its own id')
     for x in items:
         if x not in support and x not in unknown:
             warnings.append(f'no support given for {x}, assuming table')
@@ -189,8 +262,78 @@ def scene_to_json(sc: dict) -> dict:
 
 
 # --------------------------------------------------------------------------- goal
+def expand_sort(raw_goal, sc: dict):
+    """{"sort_by_color": true} -> one {"object": x, "in": <place of x's colour>} per object.
+    Objects the goal names explicitly keep their own entry. -> (goal, problem or None)"""
+    entries = [raw_goal] if isinstance(raw_goal, dict) else list(raw_goal or []) \
+        if isinstance(raw_goal, list) else None
+    if entries is None:
+        return raw_goal, None
+    sort = any((isinstance(g, dict) and g.get('sort_by_color')) or g == 'sort_by_color' for g in entries)
+    if not sort:
+        return raw_goal, None
+    rest = [g for g in entries if not ((isinstance(g, dict) and g.get('sort_by_color')) or g == 'sort_by_color')]
+    named = {sc['names'].get(str(g.get('object'))) for g in rest if isinstance(g, dict)}
+    by_colour = {}
+    for p, d in sc['env']['places'].items():
+        if d.get('color'):
+            by_colour.setdefault(d['color'], p)
+    added = [{'object': x, 'in': by_colour[d['color']]} for x, d in sc['items'].items()
+             if x not in named and d.get('color') in by_colour]
+    if not added and not rest:
+        cols = sorted({d['color'] for d in sc['items'].values() if d.get('color')})
+        return None, ('sort by colour: no place has the colour of any object (objects: '
+                      + (', '.join(cols) or 'no colours given') + '; places: '
+                      + (', '.join(sorted(by_colour)) or 'none with a colour') + ')')
+    return rest + added, None
+
+
+def stack_goal(raw_goal, sc: dict):
+    """{"stack_by_color": true} -> (col-ok x) for every object with a colour: one stack per colour,
+    order and base chosen by the planner. -> (goal or None if not asked, problem or None)"""
+    entries = [raw_goal] if isinstance(raw_goal, dict) else raw_goal if isinstance(raw_goal, list) else []
+    flag = [g for g in entries if (isinstance(g, dict) and g.get('stack_by_color')) or g == 'stack_by_color']
+    if not flag:
+        return None, None
+    if len(flag) != len(entries):
+        return None, 'stack_by_color cannot be combined with other goal entries yet; send it alone'
+    goal = [('col-ok', x) for x, d in sc['items'].items() if d.get('color')]
+    if not goal:
+        return None, 'stack by colour: no object has a colour (send "color" for each object)'
+    return goal, None
+
+
+def formula_goal(raw_goal, sc: dict):
+    """{"formula": {...}} -> [("formula", <json text>)] after checking it against the scene.
+    -> (goal or None if not a formula goal, problem or None)"""
+    import goal_logic
+    entries = [raw_goal] if isinstance(raw_goal, dict) else raw_goal if isinstance(raw_goal, list) else []
+    flag = [g for g in entries if isinstance(g, dict) and 'formula' in g]
+    if not flag:
+        return None, None
+    if len(flag) != len(entries):
+        return None, 'the goal formula cannot be combined with other goal entries; put everything in the formula'
+    try:
+        goal_logic.compile_goal(flag[0]['formula'], sc)
+    except goal_logic.FormulaError as e:
+        return None, f'the goal formula is invalid: {e}'
+    f = flag[0]['formula']
+    return [('formula', f if isinstance(f, str) else json.dumps(f, sort_keys=True))], None
+
+
 def resolve_goal(raw_goal, sc: dict) -> tuple[list[tuple[str, ...]] | None, str | None]:
     """Normalize + ground the goal on the scene ids. Returns (goal, problem_for_the_user)."""
+    stacked, problem = stack_goal(raw_goal, sc)
+    if problem or stacked:
+        return stacked, problem
+    formula, problem = formula_goal(raw_goal, sc)
+    if problem or formula:
+        return formula, problem
+    raw_goal, problem = expand_sort(raw_goal, sc)
+    if problem:
+        return None, problem
+    if isinstance(raw_goal, list) and not raw_goal:
+        return None, 'the model wrote an empty goal for this instruction (no object, no place)'
     goal = normalize_goal(raw_goal)
     if goal is None:
         return None, f'goal has an unexpected format: {json.dumps(raw_goal)[:200]}'
@@ -316,7 +459,8 @@ def goal_prompt(sc: dict, instruction: str) -> str:
     for p, d in sc['env']['places'].items():
         extra = [] if d['open'] else ['lid closed']
         extra.append(f'room for {d["slots"]}')
-        pls.append(f'- {p}: {d["kind"]} ({", ".join(extra)})')
+        colour = f', colour {d["color"]}' if d.get('color') else ''
+        pls.append(f'- {p}: {d["kind"]}{colour} ({", ".join(extra)})')
     places = '\n'.join(pls) if pls else '- (none)'
     return f"""A robot arm will rearrange objects on a table. This is what is in the scene:
 
@@ -333,8 +477,24 @@ One entry per requirement:
   {{"object": "<id>", "on": "<object id>"}}    the object rests directly on top of another object
   {{"object": "<id>", "in": "<place id>"}}
   {{"object": "<id>", "on": "table"}}
+  {{"sort_by_color": true}}                     every object goes into the place of its own colour
+  {{"stack_by_color": true}}                    one stack per colour on the table, any order (write it alone)
+  {{"formula": F}}                              any other goal, as a logic formula (write it alone), see below
+For "make every stack one colour" (or "stack the objects by colour") write only {{"stack_by_color": true}}.
+For "sort by colour" (or "put everything where its colour belongs") write the one entry
+{{"sort_by_color": true}} instead of one entry per object; add separate entries only for objects that
+the instruction sends somewhere else.
 "object" is always the one that is moved or placed on top. A stack of three needs two entries
 (top on middle, middle on bottom). List only what the instruction requires.
+If none of these fits, write ONE entry {{"formula": F}} that says what must be TRUE AT THE END.
+F is built from (every node has one key, except forall/exists):
+  {{"and": [F, ..]}} {{"or": [F, ..]}} {{"not": F}} {{"imply": [F, F]}}
+  {{"forall": {{"x": "object"}}, "where": F, "body": F}}   {{"exists": {{"x": "object", "p": "place"}}, "where": F, "body": F}}
+  facts: {{"on": ["x", "y"]}} x directly on y, {{"on_table": ["x"]}}, {{"in": ["x", "p"]}}, {{"clear": ["x"]}} nothing on x,
+         {{"above": ["x", "y"]}} somewhere above y in a stack,
+         {{"color": ["x", "red"]}}, {{"shape": ["x", "cube"]}}, {{"same_color": ["x", "y"]}}, {{"same_shape": ["x", "y"]}}, {{"is": ["x", "y"]}}
+Names are ids from the lists above or variables you declare. Example, "put every cube into the red zone":
+{{"formula": {{"forall": {{"x": "object"}}, "where": {{"shape": ["x", "cube"]}}, "body": {{"in": ["x", "red_zone"]}}}}}}
 If the instruction also limits HOW it may be done, add "constraints" (only what the instruction says),
 and for every constraint copy the EXACT words of the instruction that say it into "evidence":
   "no_table": true                       nothing may be put down on the table
@@ -374,11 +534,19 @@ def plan_for(sc: dict, goal, planner: str = 'auto', constraints: dict | None = N
     if impossible:
         return {'status': 'no_plan', 'message': '; '.join(impossible), 'plan': None,
                 'planner': 'precheck', 'planner_status': 'unsolvable', 'plan_s': 0.0}
+    if goal and goal[0][0] == 'formula':
+        return plan_formula(sc, goal[0][1], cons)
+    stack = bool(goal) and all(g[0] == 'col-ok' for g in goal)      # one stack per colour
     ptext = make_problem('openworld', sc['env'], sc['items'], sc['support'], goal, sc['hidden'])
     domain_pddl, domain_path = None, None
-    if pddl_task.needs_custom_domain(cons, sc):
-        domain_pddl = pddl_task.make_domain(cons, sc)
-        ptext = pddl_task.apply_to_problem(ptext, cons, sc)
+    custom = pddl_task.needs_custom_domain(cons, sc)
+    if custom or stack:
+        domain_pddl = pddl_task.make_domain(cons, sc) if custom else DOMAIN_PATH.read_text()
+        if custom:
+            ptext = pddl_task.apply_to_problem(ptext, cons, sc)
+        if stack:
+            domain_pddl = pddl_task.stack_by_colour_domain(domain_pddl)
+            ptext = pddl_task.stack_by_colour_problem(ptext, sc)
         domain_path = pddl_task.write_domain(domain_pddl)
     try:
         problem = parse_problem(ptext, domain_path) if domain_path else parse_problem(ptext)
@@ -393,6 +561,9 @@ def plan_for(sc: dict, goal, planner: str = 'auto', constraints: dict | None = N
             acts = [(a, list(args)) for a, args in hit['acts']]
             status, used = hit['status'], hit['planner']
             dt = time.perf_counter() - t_mem
+        elif stack and planner == 'auto' and not cons and not sc['hidden'] \
+                and (cs := colour_stack_plan(sc)) is not None:
+            status, acts, dt, used = cs
         else:
             if planner == 'auto':
                 # 1. a fast planner (about 0.1 s). 2. if its plan moves only objects that must move,
@@ -400,7 +571,7 @@ def plan_for(sc: dict, goal, planner: str = 'auto', constraints: dict | None = N
                 # fast plan if that search does not finish in time (the response says so).
                 import plan_quality
                 status, acts, dt, used = solve(problem, 'auto', timeout=SATISFICING_TIMEOUT_S)
-                lb = len(plan_quality.must_move(sc['support'], sc['items'], goal))
+                lb = plan_quality.lower_bound(sc['support'], sc['items'], goal)
                 if acts is not None and len(plan_quality.moves_of(acts)) > lb:
                     s2, a2, dt2, u2 = solve(problem, 'fast-downward-opt', timeout=OPTIMAL_TIMEOUT_S)
                     dt += dt2
@@ -420,6 +591,10 @@ def plan_for(sc: dict, goal, planner: str = 'auto', constraints: dict | None = N
     if sim['ok']:
         import plan_quality
         out['quality'] = plan_quality.assess(sc, goal, acts, used, str(status))
+        if used == 'colour-stacks' and str(status) == 'solved_optimal':
+            out['quality'].update(optimal=True, max_extra_moves=0,
+                                  proof='exact search for one stack per colour: A* whose estimate '
+                                        '(objects that must still move) is never too high')
         if mem_state == 'miss':
             memory.put('plan', pkey, {'acts': acts, 'planner': used, 'status': str(status)})
     if mem_state:
@@ -428,14 +603,104 @@ def plan_for(sc: dict, goal, planner: str = 'auto', constraints: dict | None = N
             'message': None if sim['ok'] else f'plan failed verification: {sim["fail_reason"]}',
             'verified': sim['ok'],
             # helper actions of a per-request domain keep the robot's normal action names
-            'plan': [{'action': a.replace('pick-first-', 'pick-'), 'args': list(p),
-                      'pddl': f'({a.replace("pick-first-", "pick-")} {" ".join(p)})'} for a, p in acts]}
+            'plan': robot_plan(acts)}
+
+
+def plan_formula(sc: dict, formula_json: str, cons: dict) -> dict:
+    """General goal: search for moves (formula_plan.py), then check the plan twice: the domain's
+    simulator confirms every action is allowed, and the formula is evaluated on the final state."""
+    import formula_plan
+    import goal_logic
+    import pddl_task
+    goal = goal_logic.compile_goal(formula_json, sc)
+    base = {'planner': 'goal-search', 'plan_s': 0.0}
+    if sc['hidden']:
+        return {**base, 'status': 'no_plan', 'plan': None, 'planner_status': 'unsupported',
+                'message': 'a goal formula needs every object visible; hidden: ' + ', '.join(sc['hidden'])}
+    found = formula_plan.find_moves(sc, goal, cons)
+    base.update(plan_s=found['seconds'], planner_status='solved_satisficing' if found['moves'] is not None else 'unsolved')
+    if found['moves'] is None:
+        return {**base, 'status': 'no_plan', 'message': found['reason'], 'plan': None}
+    acts = formula_plan.to_actions(found['moves'], sc)
+    ptext = make_problem('openworld', sc['env'], sc['items'], sc['support'], [('hand-empty',)], sc['hidden'])
+    domain_path = None
+    if pddl_task.needs_custom_domain(cons, sc):
+        domain_path = pddl_task.write_domain(pddl_task.make_domain(cons, sc))
+        ptext = pddl_task.apply_to_problem(ptext, cons, sc)
+    try:
+        sim = simulate(parse_problem(ptext, domain_path) if domain_path else parse_problem(ptext), acts)
+    finally:
+        if domain_path:
+            domain_path.unlink(missing_ok=True)
+    final = dict(sc['support'])
+    for x, dst in found['moves']:
+        final[x] = dst
+    holds = goal.holds(goal_logic.View(final, sc['items']))
+    ok = sim['ok'] and holds
+    n = len(found['moves'])
+    picked = [x for x, _ in found['moves']]
+    quality = {'moves': n, 'lower_bound': None, 'optimal': n == 0,
+               'proof': 'the goal already holds' if n == 0 else None, 'max_extra_moves': None,
+               'moved_more_than_once': sorted({x for x in picked if picked.count(x) > 1}),
+               'note': None if n == 0 else
+               f'general goal: the plan is verified, not proven shortest (first plan {found["first"]} moves, '
+               f'best found {n}, search {found["seconds"]} s)'}
+    return {**base, 'problem_pddl': ptext, 'quality': quality, 'verified': ok,
+            'status': 'ok' if ok else 'error',
+            'message': None if ok else ('plan failed verification: ' + (sim['fail_reason'] or 'goal formula not reached')),
+            'plan': robot_plan(acts)}
+
+
+def colour_stack_plan(sc: dict):
+    """One stack per colour with the dedicated search (colour_stacks.py). Returns the planner
+    tuple (status, acts, seconds, name) with the bookkeeping steps the PDDL problem needs for its
+    goal check, or None when the scene is outside its scope (objects in zones, no colour)."""
+    import colour_stacks
+    colour = {x: d.get('color') for x, d in sc['items'].items()}
+    if not all(colour.values()):
+        return None
+    t0 = time.perf_counter()
+    moves, optimal = colour_stacks.solve(sc['support'], colour)
+    if moves is None:
+        return None
+    acts = colour_stacks.to_actions(moves)
+    sup = dict(sc['support'])
+    for x, _, dst in moves:
+        sup[x] = dst
+    for x, y in sup.items():                    # mark every object correct, as the goal asks
+        acts.append(('claim-base', [x, pddl_task_colour(colour[x])]) if y == 'table'
+                    else ('confirm-on', [x, y, pddl_task_colour(colour[x])]))
+    return ('solved_optimal' if optimal else 'solved_satisficing', acts,
+            time.perf_counter() - t0, 'colour-stacks')
+
+
+def pddl_task_colour(c: str) -> str:
+    import pddl_task
+    return pddl_task.colour_token(c)
+
+
+def robot_plan(acts) -> list[dict]:
+    """Planner actions -> the robot's action names. Helper actions of per-request domains are
+    renamed back (pick-first-* -> pick-*, place-on-same -> place-on-item, place-as-base ->
+    place-on-table, without the colour argument); bookkeeping steps (claim-base, confirm-on)
+    move nothing and are left out."""
+    import pddl_task
+    out = []
+    for a, p in acts:
+        if a in pddl_task.STACK_BOOKKEEPING:
+            continue
+        p = list(p)
+        if a in pddl_task.STACK_RENAME:
+            a, p = pddl_task.STACK_RENAME[a], p[:-1]          # drop the colour argument
+        a = a.replace('pick-first-', 'pick-')
+        out.append({'action': a, 'args': p, 'pddl': f'({a} {" ".join(p)})'})
+    return out
 
 
 # --------------------------------------------------------------------------- end to end
 def run(instruction: str | None = None, scene: dict | None = None, images=None, vlm=None,
         goal=None, planner: str = 'auto', max_visual_tokens: int = 1024, sample: bool = False,
-        constraints: dict | None = None, memory=None) -> dict:
+        constraints: dict | None = None, memory=None, places: list | None = None) -> dict:
     """The server's job. Give `scene` (semantic path) or `images` (+ vlm). `goal` skips the goal call."""
     t0 = time.perf_counter()
     res = {'status': 'error', 'message': None, 'instruction': instruction, 'timings': {}, 'model_answers': {}}
@@ -475,6 +740,13 @@ def run(instruction: str | None = None, scene: dict | None = None, images=None, 
         scene, err = _json_answer(g['text'])
         if err:
             return done('error', f'perception: {err}')
+    if places:                                    # fixed places of the lab (e.g. coloured papers outside
+        scene = dict(scene)                       # the picture): add the ones the camera did not report
+        seen = {make_id(p.get('id') if isinstance(p, dict) else p)
+                for p in (scene.get('places') or scene.get('zones') or [])}
+        extra = [p for p in places if make_id(p.get('id') if isinstance(p, dict) else p) not in seen]
+        scene['places'] = list(scene.get('places') or scene.get('zones') or []) + extra
+        scene.pop('zones', None)
     try:
         sc = normalize_scene(scene)
     except SceneError as e:
@@ -526,8 +798,15 @@ def run(instruction: str | None = None, scene: dict | None = None, images=None, 
     grounded, problem = resolve_goal(goal, sc)
     if problem:
         return done('clarify', problem, goal_raw=goal)
-    res['goal'] = [{'object': g[1], 'on': 'table'} if g[0] == 'on-table'
-                   else {'object': g[1], g[0]: g[2]} for g in grounded]
+    if grounded and grounded[0][0] == 'formula':
+        import goal_logic
+        formula = json.loads(grounded[0][1])
+        res['goal'] = [{'formula': formula, 'in_words': goal_logic.describe(formula)}]
+    elif grounded and all(g[0] == 'col-ok' for g in grounded):
+        res['goal'] = [{'stack_by_color': True}]             # replanning expands it again on the new scene
+    else:
+        res['goal'] = [{'object': g[1], 'on': 'table'} if g[0] == 'on-table'
+                       else {'object': g[1], g[0]: g[2]} for g in grounded]
     import pddl_task
     cons, problems = pddl_task.normalize_constraints(constraints, sc)
     if problems:
@@ -634,7 +913,9 @@ def retryable(res: dict) -> bool:
     if not res['model_answers']:
         return False                                  # nothing came from the model
     msg = res.get('message') or ''
-    return res['status'] == 'error' or msg.startswith('goal has an unexpected format')
+    return res['status'] == 'error' or msg.startswith(('goal has an unexpected format',
+                                                       'the model wrote an empty goal',
+                                                       'the goal formula is invalid'))
 
 
 def run_until_ok(attempts: int = 3, **kw) -> dict:
@@ -700,6 +981,11 @@ class RuleMock:
         return scored[0][1]
 
     def _goal(self, instruction: str, sc: dict) -> dict:
+        low = instruction.lower()
+        if re.search(r'\bstacks?\b', low) and re.search(r'colou?r', low):
+            return {'goal': [{'stack_by_color': True}]}
+        if re.search(r'\bsort\b|\bby colou?r\b', low):
+            return {'goal': [{'sort_by_color': True}]}
         goal = []
         for part in re.split(r'\s*(?:,|;|\.\s|\bbut\b|\band\b|\bthen\b)\s*', instruction.lower()):
             if re.search(r"\b(do not|don't|never|without|first|leave|keep)\b", part):

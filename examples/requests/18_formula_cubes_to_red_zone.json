@@ -1,0 +1,150 @@
+{
+  "scene": {
+    "objects": [
+      {
+        "id": "green_bar_1",
+        "color": "green",
+        "shape": "bar",
+        "on": "table"
+      },
+      {
+        "id": "blue_block_1",
+        "color": "blue",
+        "shape": "block",
+        "on": "green_bar_1"
+      },
+      {
+        "id": "yellow_block_1",
+        "color": "yellow",
+        "shape": "block",
+        "on": "blue_block_1"
+      },
+      {
+        "id": "red_block_1",
+        "color": "red",
+        "shape": "block",
+        "on": "yellow_block_1"
+      },
+      {
+        "id": "yellow_bar_1",
+        "color": "yellow",
+        "shape": "bar",
+        "on": "table"
+      },
+      {
+        "id": "red_bar_1",
+        "color": "red",
+        "shape": "bar",
+        "on": "yellow_bar_1"
+      },
+      {
+        "id": "green_cube_1",
+        "color": "green",
+        "shape": "cube",
+        "on": "red_bar_1"
+      },
+      {
+        "id": "blue_block_2",
+        "color": "blue",
+        "shape": "block",
+        "on": "green_cube_1"
+      },
+      {
+        "id": "red_block_2",
+        "color": "red",
+        "shape": "block",
+        "on": "table"
+      },
+      {
+        "id": "yellow_cylinder_1",
+        "color": "yellow",
+        "shape": "cylinder",
+        "on": "red_block_2"
+      },
+      {
+        "id": "green_bar_2",
+        "color": "green",
+        "shape": "bar",
+        "on": "yellow_cylinder_1"
+      },
+      {
+        "id": "blue_cube_1",
+        "color": "blue",
+        "shape": "cube",
+        "on": "green_bar_2"
+      },
+      {
+        "id": "blue_bar_1",
+        "color": "blue",
+        "shape": "bar",
+        "on": "table"
+      },
+      {
+        "id": "red_cube_1",
+        "color": "red",
+        "shape": "cube",
+        "on": "blue_bar_1"
+      },
+      {
+        "id": "yellow_bar_2",
+        "color": "yellow",
+        "shape": "bar",
+        "on": "red_cube_1"
+      },
+      {
+        "id": "green_cube_2",
+        "color": "green",
+        "shape": "cube",
+        "on": "yellow_bar_2"
+      }
+    ],
+    "zones": [
+      {
+        "id": "red_zone",
+        "color": "red",
+        "capacity": 4
+      },
+      {
+        "id": "yellow_zone",
+        "color": "yellow",
+        "capacity": 4
+      },
+      {
+        "id": "blue_zone",
+        "color": "blue",
+        "capacity": 4
+      },
+      {
+        "id": "green_zone",
+        "color": "green",
+        "capacity": 4
+      }
+    ]
+  },
+  "goal": [
+    {
+      "formula": {
+        "forall": {
+          "x": "object"
+        },
+        "where": {
+          "shape": [
+            "x",
+            "cube"
+          ]
+        },
+        "body": {
+          "in": [
+            "x",
+            "red_zone"
+          ]
+        }
+      }
+    }
+  ],
+  "_expected": "any goal as a formula, no model call: all cubes into the red zone (4 cubes, 6 moves); the plan is verified, not proven shortest",
+  "_check": {
+    "status": "ok",
+    "max_moves": 8
+  }
+}

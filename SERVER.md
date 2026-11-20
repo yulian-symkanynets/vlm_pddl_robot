@@ -83,6 +83,12 @@ $ printf 'nameserver 8.8.8.8\nnameserver 1.1.1.1\n' | sudo tee /etc/resolv.conf
 $ printf '[network]\ngenerateResolvConf = false\n' | sudo tee /etc/wsl.conf     # keep it after restarts
 ```
 
+## API reference
+
+`docs/api.html` (open it in a browser): scene JSON, every endpoint with its fields, responses,
+replanning, images, errors and the network setup. Ready example for the four-tower photo of
+20 Nov: `examples/requests/15_four_towers_sort.json`.
+
 ## Why the first start of a model takes long
 
 * **First start of a model downloads it** (2B about 4-5 GB, 8B about 17 GB). The log says

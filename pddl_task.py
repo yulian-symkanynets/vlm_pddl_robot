@@ -93,9 +93,15 @@ def _blocks(text: str) -> dict[str, tuple[int, int]]:
 
 
 def _add_pre(block: str, fact: str) -> str:
-    return block.replace(":precondition (and ", f":precondition (and {fact} ", 1) \
-        if ":precondition (and " in block else \
-        re.sub(r":precondition \(([^()]*\([^()]*\))\)", rf":precondition (and \1 {fact})", block, count=1)
+    """Add `fact` to an action's precondition: "(and ...)" gets one more entry, a single fact
+    "(holding ?x)" becomes "(and (holding ?x) fact)"."""
+    if ":precondition (and " in block:
+        return block.replace(":precondition (and ", f":precondition (and {fact} ", 1)
+    new, n = re.subn(r":precondition (\([^()]*\))", lambda m: f":precondition (and {m.group(1)} {fact})",
+                     block, count=1)
+    if n != 1:
+        raise ValueError(f"cannot add {fact} to precondition of: {block[:60]}")
+    return new
 
 
 def make_domain(cons: dict, sc: dict, base: str | None = None) -> str:
@@ -197,3 +203,58 @@ def write_domain(text: str) -> Path:
     f.write(text)
     f.close()
     return Path(f.name)
+
+
+# --------------------------------------------------------------------------- one stack per colour
+# Goal "every stack one colour" has no fixed final arrangement: any red object may be the base and
+# the others may come in any order. The planner chooses, so the result is the arrangement with the
+# fewest moves. Encoding (plain STRIPS, the robot's own pick/place actions are unchanged):
+#   (col-ok ?x)       ?x stands correctly: on an object of its own colour, or it is its colour's base
+#   (base-free ?c)    colour ?c has no base yet (one token per colour -> exactly one stack per colour)
+#   (pickable ?x)     a claimed base stays where it is
+#   claim-base        an object on the table becomes its colour's base
+#   confirm-on        an object on an object of its own colour is marked correct
+# Picking an object removes its mark. Places never give the mark, so every object needs exactly
+# one bookkeeping step: plan length = 2 * moves + number of objects, and the shortest plan is the
+# one with the fewest moves. Bookkeeping steps move nothing and are left out of the robot's plan.
+STACK_BOOKKEEPING = ("claim-base", "confirm-on")
+STACK_RENAME: dict[str, str] = {}
+
+
+def colour_token(c: str) -> str:
+    return f"colour_{c}"
+
+
+def stack_by_colour_domain(text: str) -> str:
+    """Add colour stacking to a domain text (the base domain or one already changed by make_domain)."""
+    text = text.replace("(:types item place slot)", "(:types item place slot colour)", 1)
+    text = re.sub(r"(\(:predicates)", r"\1\n    (colour-of ?x - item ?c - colour)\n    (col-ok ?x - item)\n"
+                  r"    (base-free ?c - colour)\n    (pickable ?x - item)", text, count=1)
+    b = _blocks(text)
+    for name in sorted(b, key=lambda n: -b[n][0]):            # edit back to front: offsets stay valid
+        if name.startswith("pick-"):
+            s, e = b[name]
+            blk = _add_pre(text[s:e], "(pickable ?x)")
+            blk = blk.replace(":effect (and ", ":effect (and (not (col-ok ?x)) ", 1)
+            text = text[:s] + blk + text[e:]
+    new = ["""(:action claim-base
+    :parameters (?x - item ?c - colour)
+    :precondition (and (on-table ?x) (colour-of ?x ?c) (base-free ?c) (pickable ?x))
+    :effect (and (col-ok ?x) (not (base-free ?c)) (not (pickable ?x))))""",
+           """(:action confirm-on
+    :parameters (?x - item ?y - item ?c - colour)
+    :precondition (and (on ?x ?y) (colour-of ?x ?c) (colour-of ?y ?c))
+    :effect (col-ok ?x))"""]
+    end = text.rstrip().rfind(")")
+    return text[:end] + "\n  " + "\n\n  ".join(new) + "\n" + text[end:]
+
+
+def stack_by_colour_problem(ptext: str, sc: dict) -> str:
+    """Colour objects, colours of items, one base token per colour, all items pickable."""
+    colours = sorted({d["color"] for d in sc["items"].values() if d.get("color")})
+    ptext = ptext.replace("(:objects\n    ", "(:objects\n    " + " ".join(colour_token(c) for c in colours)
+                          + " - colour\n    ", 1)
+    facts = [f"(colour-of {x} {colour_token(d['color'])})" for x, d in sc["items"].items() if d.get("color")]
+    facts += [f"(base-free {colour_token(c)})" for c in colours]
+    facts += [f"(pickable {x})" for x in sc["items"]]
+    return ptext.replace("(:init\n    ", "(:init\n    " + "\n    ".join(facts) + "\n    ", 1)

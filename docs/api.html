@@ -1,0 +1,489 @@
+<title>HEKATE Planner API</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap">
+<style>
+/* Layout: a lab notebook for one server. Sticky anchor bar, one reading column, wide code and tables scroll inside themselves. */
+:root {
+  --bg: #f6f7f8;
+  --surface: #ffffff;
+  --ink: #15191d;
+  --muted: #5a636c;
+  --line: #dde1e5;
+  --accent: #1f5fa8;
+  --accent-soft: #e5eef8;
+  --code-bg: #eef1f4;
+  --ok: #1d7a45;
+  --warn: #9a5b00;
+  --bad: #b3261e;
+  --red: #c8332f; --yellow: #e2b100; --blue: #2b6fc2; --green: #2f8a3c;
+  --font-display: "Space Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111417; --surface: #181c20; --ink: #e8ecef; --muted: #9aa4ad; --line: #2a3036;
+    --accent: #7fb2ec; --accent-soft: #1c2a3a; --code-bg: #1d2227;
+    --ok: #5cc98a; --warn: #e3a64a; --bad: #f08a80;
+    --red: #e05a55; --yellow: #e9c23a; --blue: #5a95e0; --green: #4fae5c;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111417; --surface: #181c20; --ink: #e8ecef; --muted: #9aa4ad; --line: #2a3036;
+  --accent: #7fb2ec; --accent-soft: #1c2a3a; --code-bg: #1d2227;
+  --ok: #5cc98a; --warn: #e3a64a; --bad: #f08a80;
+  --red: #e05a55; --yellow: #e9c23a; --blue: #5a95e0; --green: #4fae5c;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.6 var(--font-body); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface); }
+.wrap { max-width: 900px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+header.top { background: var(--surface); border-bottom: 1px solid var(--line); }
+header.top .wrap { padding-block: 34px 26px; display: grid; gap: 10px; }
+.board { display: grid; grid-template-columns: repeat(8, 9px); gap: 0; width: max-content; }
+.board i { width: 9px; height: 9px; background: var(--ink); }
+.board i:nth-child(odd) { background: transparent; }
+.board i:nth-child(n+9):nth-child(-n+16):nth-child(even) { background: transparent; }
+.board i:nth-child(n+9):nth-child(-n+16):nth-child(odd) { background: var(--ink); }
+h1 { font: 600 2.1rem/1.15 var(--font-display); margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+.sub { color: var(--muted); margin: 0; max-width: 62ch; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px 18px; font: 500 .82rem var(--font-mono); color: var(--muted); }
+nav.anchors { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--surface); border-bottom: 1px solid var(--line); }
+nav.anchors .wrap { display: flex; gap: 4px 16px; overflow-x: auto; padding-block: 10px; scrollbar-width: thin; }
+nav.anchors a { color: var(--muted); text-decoration: none; font-size: .88rem; white-space: nowrap; }
+nav.anchors a:hover, nav.anchors a:focus-visible { color: var(--accent); }
+main .wrap { padding-block: 10px 60px; }
+section { padding-top: 34px; scroll-margin-top: 54px; }
+h2 { font: 600 1.45rem/1.25 var(--font-display); margin: 0 0 10px; text-wrap: balance; display: flex; gap: 10px; align-items: baseline; }
+h2 .n { font: 500 .9rem var(--font-mono); color: var(--accent); }
+h3 { font: 600 1.05rem/1.3 var(--font-display); margin: 26px 0 6px; }
+p { margin: 0 0 12px; max-width: 70ch; }
+a { color: var(--accent); }
+code { font: .86em var(--font-mono); background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin: 16px 0 6px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; display: grid; gap: 2px; }
+.card .v { font: 600 1.55rem/1.1 var(--font-display); font-variant-numeric: tabular-nums; }
+.card .k { color: var(--muted); font-size: .86rem; }
+.flow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 14px 0; font-size: .88rem; }
+.flow span { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 4px 9px; }
+.flow b { color: var(--muted); font-weight: 400; }
+.codebox { position: relative; margin: 10px 0 16px; min-width: 0; }
+pre { margin: 0; background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; overflow-x: auto; font: .82rem/1.55 var(--font-mono); color: var(--ink); }
+pre.tall { max-height: 420px; overflow-y: auto; }
+.copy { position: absolute; top: 8px; right: 8px; font: 500 .75rem var(--font-body); color: var(--muted); background: var(--surface); border: 1px solid var(--line); border-radius: 5px; padding: 3px 9px; cursor: pointer; }
+.copy:hover, .copy:focus-visible { color: var(--accent); border-color: var(--accent); }
+.label { font: 500 .78rem var(--font-body); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 14px 0 4px; }
+.tablewrap { overflow-x: auto; margin: 8px 0 18px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: .88rem; }
+th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-weight: 600; color: var(--muted); font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; background: var(--code-bg); }
+tr:last-child td { border-bottom: 0; }
+td code { white-space: nowrap; }
+.ep { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px 6px; margin: 16px 0; min-width: 0; }
+.ep h3 { margin: 0 0 6px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-family: var(--font-mono); font-weight: 500; font-size: .98rem; }
+.verb { font: 600 .72rem var(--font-body); letter-spacing: .05em; padding: 2px 7px; border-radius: 4px; background: var(--accent-soft); color: var(--accent); }
+.verb.get { background: var(--code-bg); color: var(--muted); }
+.pill { display: inline-block; font: 600 .74rem var(--font-mono); padding: 1px 7px; border-radius: 999px; border: 1px solid currentColor; }
+.ok { color: var(--ok); } .warn { color: var(--warn); } .bad { color: var(--bad); }
+figure { margin: 14px 0 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 12px 6px; }
+figure svg { width: 100%; height: auto; max-width: 100%; display: block; }
+figcaption { color: var(--muted); font-size: .84rem; padding: 6px 4px; }
+.t-floor { stroke: var(--muted); stroke-width: 2; }
+.t-cap { fill: var(--muted); font: 12px var(--font-body); }
+.b-red { fill: var(--red); } .b-yellow { fill: var(--yellow); } .b-blue { fill: var(--blue); } .b-green { fill: var(--green); }
+ul.plain { margin: 0 0 12px; padding-left: 20px; max-width: 70ch; }
+ul.plain li { margin-bottom: 5px; }
+.note { background: var(--accent-soft); border-radius: 8px; padding: 10px 14px; margin: 12px 0 16px; max-width: 72ch; }
+footer { color: var(--muted); font-size: .82rem; border-top: 1px solid var(--line); }
+footer .wrap { padding-block: 18px 30px; }
+@media (max-width: 560px) { h1 { font-size: 1.7rem; } .ep { padding: 14px 14px 4px; } }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+html { scroll-behavior: smooth; }
+</style>
+
+<header class="top">
+  <div class="wrap">
+    <div class="board" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <h1>HEKATE Planner API</h1>
+    <p class="sub">The planning server for the Lite 6 sorting robot. The laptop sends what it sees (a scene in JSON, or a photo) and a task in words; the server returns pick and place steps that are checked on the scene and proven shortest.</p>
+    <div class="meta"><span>server.py · port 8010</span><span>vlm_pddl repository</span><span>state 20 Nov 2026</span></div>
+  </div>
+</header>
+
+<nav class="anchors" aria-label="Sections">
+  <div class="wrap">
+    <a href="#overview">Overview</a><a href="#quickstart">Quick start</a><a href="#scene">Scene JSON</a><a href="#tasks">Tasks</a><a href="#endpoints">Endpoints</a><a href="#responses">Responses</a><a href="#replan">Replanning</a><a href="#images">Images</a><a href="#errors">Errors</a><a href="#network">Network</a><a href="#open">Open points</a>
+  </div>
+</nav>
+
+<main>
+<div class="wrap">
+
+<section id="overview">
+  <h2><span class="n">1</span>Overview</h2>
+  <p>The laptop calls the server only for situations it cannot solve by itself: objects stacked on each other, a task it does not know, or a scene that changed. Every answer is a list of high-level steps the robot executes deterministically. Motion planning stays on the robot side.</p>
+  <div class="flow"><span>scene JSON or photo</span><b>→</b><span>understand task (model)</span><b>→</b><span>planning problem</span><b>→</b><span>plan + proof</span><b>→</b><span>check on the scene</span><b>→</b><span>steps</span></div>
+  <div class="cards">
+    <div class="card"><span class="v">0.68 s</span><span class="k">plan for 16 objects (example below), no model needed for the scene</span></div>
+    <div class="card"><span class="v">1.4 kB</span><span class="k">that scene as JSON, against 387 kB for its photo</span></div>
+    <div class="card"><span class="v">16 of 16</span><span class="k">moves, proven shortest: every object that must move moves once</span></div>
+    <div class="card"><span class="v">0 calls</span><span class="k">to the model when replanning from a new scene JSON</span></div>
+  </div>
+  <p class="label">Base address</p>
+  <div class="tablewrap"><table>
+    <tr><th>From</th><th>Address</th></tr>
+    <tr><td>HEKATE itself</td><td><code>http://127.0.0.1:8010</code></td></tr>
+    <tr><td>Same lab network</td><td><code>http://192.168.73.15:8010</code></td></tr>
+    <tr><td>Anywhere, through Tailscale</td><td><code>http://100.86.139.108:8010</code></td></tr>
+  </table></div>
+  <p>Interactive reference with a form for every endpoint: <code>/docs</code>. Test page: <code>/</code>. Graphs of past requests: <code>/dashboard</code>.</p>
+</section>
+
+<section id="quickstart">
+  <h2><span class="n">2</span>Quick start</h2>
+  <p class="label">Is it up?</p>
+  <div class="codebox"><pre>curl http://192.168.73.15:8010/health</pre></div>
+  <p class="label">Plan from a scene file</p>
+  <div class="codebox"><pre>curl -s http://192.168.73.15:8010/plan \
+     -H 'Content-Type: application/json' \
+     --data-binary @examples/requests/15_four_towers_sort.json</pre></div>
+  <p class="label">From Python (the laptop)</p>
+  <div class="codebox"><pre>import requests
+URL = "http://192.168.73.15:8010"
+
+r = requests.post(f"{URL}/plan", json={
+    "instruction": "Sort the objects by colour into the zones.",
+    "scene": scene,                     # see section 3
+}).json()
+
+if r["status"] == "ok":
+    for step in r["plan"]:
+        print(step["action"], step["args"])     # pick-from-item ['blue_block_2', 'green_cube_1'] ...
+    print("shortest:", r["quality"]["optimal"])
+else:
+    print(r["status"], r["message"])            # clarify / need_observation / no_plan / error</pre></div>
+</section>
+
+<section id="scene">
+  <h2><span class="n">3</span>Scene JSON</h2>
+  <p>The scene says which objects exist, what each one stands on, and where objects may be put. Positions in millimetres are not needed: the planner works with "what stands on what", and the robot finds the exact poses itself.</p>
+  <h3>Objects</h3>
+  <div class="tablewrap"><table>
+    <tr><th>Field</th><th>Required</th><th>Meaning</th></tr>
+    <tr><td><code>id</code></td><td>yes</td><td>Unique name, e.g. <code>red_block_2</code>. Letters, digits, underscores.</td></tr>
+    <tr><td><code>on</code></td><td>yes</td><td>What it stands on: <code>table</code>, another object's id, or a zone id. <code>unknown</code> if the camera cannot tell.</td></tr>
+    <tr><td><code>color</code></td><td>recommended</td><td><code>red</code>, <code>yellow</code>, <code>blue</code>, <code>green</code>, … Used to understand "the red ones".</td></tr>
+    <tr><td><code>shape</code></td><td>recommended</td><td><code>cube</code>, <code>block</code>, <code>bar</code>, <code>cylinder</code>, <code>prism</code>, … Nothing can be put on a prism.</td></tr>
+    <tr><td><code>label</code></td><td>no</td><td>Free description shown to the model. Default: color + shape.</td></tr>
+    <tr><td><code>height_mm</code></td><td>no</td><td>Only needed for shelves with a height limit.</td></tr>
+  </table></div>
+  <h3>Places (<code>zones</code> or <code>places</code>)</h3>
+  <div class="tablewrap"><table>
+    <tr><th>Field</th><th>Meaning</th></tr>
+    <tr><td><code>id</code></td><td>e.g. <code>red_zone</code>. The open table is always available and is not a place.</td></tr>
+    <tr><td><code>color</code></td><td>Colour of the paper, used for "sort by colour".</td></tr>
+    <tr><td><code>capacity</code></td><td>How many objects fit directly on it. Objects stacked on top of each other inside a zone do not count as "in the zone".</td></tr>
+    <tr><td><code>kind</code></td><td><code>zone</code> (default), <code>box</code>, <code>tray</code>, <code>bin</code>, <code>shelf</code>. A box may have <code>"open": false</code>.</td></tr>
+  </table></div>
+  <h3>Several objects of one colour</h3>
+  <p>Allowed and common: four red objects with different shapes are four objects. Give each its own id (<code>red_block_1</code>, <code>red_block_2</code>, <code>red_bar_1</code>, …). If two objects arrive with the same id, the server renames the second (<code>red_block_2</code>) and decides "on red_block" by physics: at most one object on another, no loops. When both readings are possible it does not guess and answers <span class="pill warn">need_observation</span>.</p>
+  <h3>Example: the four towers of 20 November</h3>
+  <figure>
+    <svg viewBox="0 0 560 270" role="img" aria-label="Four towers of the example scene, drawn from the JSON"><line x1="12" y1="236" x2="548" y2="236" class="t-floor"/><rect x="29.0" y="218.0" width="92" height="18" rx="3" class="b-green"><title>green_bar_1 on table</title></rect><rect x="44.0" y="181.0" width="62" height="34" rx="3" class="b-blue"><title>blue_block_1 on green_bar_1</title></rect><rect x="44.0" y="144.0" width="62" height="34" rx="3" class="b-yellow"><title>yellow_block_1 on blue_block_1</title></rect><rect x="44.0" y="107.0" width="62" height="34" rx="3" class="b-red"><title>red_block_1 on yellow_block_1</title></rect><text x="75.0" y="256" class="t-cap" text-anchor="middle">stack 1</text><rect x="166.0" y="218.0" width="92" height="18" rx="3" class="b-yellow"><title>yellow_bar_1 on table</title></rect><rect x="166.0" y="197.0" width="92" height="18" rx="3" class="b-red"><title>red_bar_1 on yellow_bar_1</title></rect><rect x="190.0" y="150.0" width="44" height="44" rx="3" class="b-green"><title>green_cube_1 on red_bar_1</title></rect><rect x="181.0" y="113.0" width="62" height="34" rx="3" class="b-blue"><title>blue_block_2 on green_cube_1</title></rect><text x="212.0" y="256" class="t-cap" text-anchor="middle">stack 2</text><rect x="318.0" y="202.0" width="62" height="34" rx="3" class="b-red"><title>red_block_2 on table</title></rect><rect x="332.0" y="139.0" width="34" height="60" rx="10" class="b-yellow"><title>yellow_cylinder_1 on red_block_2</title></rect><rect x="303.0" y="118.0" width="92" height="18" rx="3" class="b-green"><title>green_bar_2 on yellow_cylinder_1</title></rect><rect x="327.0" y="71.0" width="44" height="44" rx="3" class="b-blue"><title>blue_cube_1 on green_bar_2</title></rect><text x="349.0" y="256" class="t-cap" text-anchor="middle">stack 3</text><rect x="440.0" y="218.0" width="92" height="18" rx="3" class="b-blue"><title>blue_bar_1 on table</title></rect><rect x="464.0" y="171.0" width="44" height="44" rx="3" class="b-red"><title>red_cube_1 on blue_bar_1</title></rect><rect x="440.0" y="150.0" width="92" height="18" rx="3" class="b-yellow"><title>yellow_bar_2 on red_cube_1</title></rect><rect x="464.0" y="103.0" width="44" height="44" rx="3" class="b-green"><title>green_cube_2 on yellow_bar_2</title></rect><text x="486.0" y="256" class="t-cap" text-anchor="middle">stack 4</text></svg>
+    <figcaption>Drawn from the JSON below, bottom to top: stack 1 green bar, blue block, yellow block, red block · stack 2 yellow bar, red bar, green cube, blue block · stack 3 red block, yellow cylinder, green bar, blue cube · stack 4 blue bar, red cube, yellow bar, green cube. The zones are not in the photo: put the coloured papers within reach and set <code>capacity</code> to the free spots on each.</figcaption>
+  </figure>
+  <div class="codebox"><button class="copy" type="button" data-target="req15">Copy</button><pre class="tall" id="req15">{
+  &quot;instruction&quot;: &quot;Sort the objects by colour into the zones.&quot;,
+  &quot;scene&quot;: {
+    &quot;objects&quot;: [
+      {&quot;id&quot;: &quot;green_bar_1&quot;, &quot;color&quot;: &quot;green&quot;, &quot;shape&quot;: &quot;bar&quot;, &quot;on&quot;: &quot;table&quot;},
+      {&quot;id&quot;: &quot;blue_block_1&quot;, &quot;color&quot;: &quot;blue&quot;, &quot;shape&quot;: &quot;block&quot;, &quot;on&quot;: &quot;green_bar_1&quot;},
+      {&quot;id&quot;: &quot;yellow_block_1&quot;, &quot;color&quot;: &quot;yellow&quot;, &quot;shape&quot;: &quot;block&quot;, &quot;on&quot;: &quot;blue_block_1&quot;},
+      {&quot;id&quot;: &quot;red_block_1&quot;, &quot;color&quot;: &quot;red&quot;, &quot;shape&quot;: &quot;block&quot;, &quot;on&quot;: &quot;yellow_block_1&quot;},
+
+      {&quot;id&quot;: &quot;yellow_bar_1&quot;, &quot;color&quot;: &quot;yellow&quot;, &quot;shape&quot;: &quot;bar&quot;, &quot;on&quot;: &quot;table&quot;},
+      {&quot;id&quot;: &quot;red_bar_1&quot;, &quot;color&quot;: &quot;red&quot;, &quot;shape&quot;: &quot;bar&quot;, &quot;on&quot;: &quot;yellow_bar_1&quot;},
+      {&quot;id&quot;: &quot;green_cube_1&quot;, &quot;color&quot;: &quot;green&quot;, &quot;shape&quot;: &quot;cube&quot;, &quot;on&quot;: &quot;red_bar_1&quot;},
+      {&quot;id&quot;: &quot;blue_block_2&quot;, &quot;color&quot;: &quot;blue&quot;, &quot;shape&quot;: &quot;block&quot;, &quot;on&quot;: &quot;green_cube_1&quot;},
+
+      {&quot;id&quot;: &quot;red_block_2&quot;, &quot;color&quot;: &quot;red&quot;, &quot;shape&quot;: &quot;block&quot;, &quot;on&quot;: &quot;table&quot;},
+      {&quot;id&quot;: &quot;yellow_cylinder_1&quot;, &quot;color&quot;: &quot;yellow&quot;, &quot;shape&quot;: &quot;cylinder&quot;, &quot;on&quot;: &quot;red_block_2&quot;},
+      {&quot;id&quot;: &quot;green_bar_2&quot;, &quot;color&quot;: &quot;green&quot;, &quot;shape&quot;: &quot;bar&quot;, &quot;on&quot;: &quot;yellow_cylinder_1&quot;},
+      {&quot;id&quot;: &quot;blue_cube_1&quot;, &quot;color&quot;: &quot;blue&quot;, &quot;shape&quot;: &quot;cube&quot;, &quot;on&quot;: &quot;green_bar_2&quot;},
+
+      {&quot;id&quot;: &quot;blue_bar_1&quot;, &quot;color&quot;: &quot;blue&quot;, &quot;shape&quot;: &quot;bar&quot;, &quot;on&quot;: &quot;table&quot;},
+      {&quot;id&quot;: &quot;red_cube_1&quot;, &quot;color&quot;: &quot;red&quot;, &quot;shape&quot;: &quot;cube&quot;, &quot;on&quot;: &quot;blue_bar_1&quot;},
+      {&quot;id&quot;: &quot;yellow_bar_2&quot;, &quot;color&quot;: &quot;yellow&quot;, &quot;shape&quot;: &quot;bar&quot;, &quot;on&quot;: &quot;red_cube_1&quot;},
+      {&quot;id&quot;: &quot;green_cube_2&quot;, &quot;color&quot;: &quot;green&quot;, &quot;shape&quot;: &quot;cube&quot;, &quot;on&quot;: &quot;yellow_bar_2&quot;}
+    ],
+    &quot;zones&quot;: [
+      {&quot;id&quot;: &quot;red_zone&quot;, &quot;color&quot;: &quot;red&quot;, &quot;capacity&quot;: 4},
+      {&quot;id&quot;: &quot;yellow_zone&quot;, &quot;color&quot;: &quot;yellow&quot;, &quot;capacity&quot;: 4},
+      {&quot;id&quot;: &quot;blue_zone&quot;, &quot;color&quot;: &quot;blue&quot;, &quot;capacity&quot;: 4},
+      {&quot;id&quot;: &quot;green_zone&quot;, &quot;color&quot;: &quot;green&quot;, &quot;capacity&quot;: 4}
+    ]
+  }
+}</pre></div>
+  <p>Saved in the repository as <code>examples/requests/15_four_towers_sort.json</code>; the scene alone as <code>examples/scenes/four_towers_2026-11-20.json</code>. Measured answer: <span class="pill ok">ok</span>, 16 moves, lower bound 16, proven shortest, planning 0.57 s.</p>
+  <h3>Other accepted forms</h3>
+  <ul class="plain">
+    <li>A support map instead of <code>on</code>: <code>"support": {"red_block_1": "yellow_block_1", ...}</code></li>
+    <li>Relations: <code>"relations": [{"subject": "a", "relation": "on", "object": "b"}]</code></li>
+    <li><code>"hidden": ["id", ...]</code> for objects that are visible but not localised well enough to grasp: the plan then starts with an <code>observe</code> step.</li>
+  </ul>
+</section>
+
+<section id="tasks">
+  <h2><span class="n">4</span>Tasks: instruction, goal, constraints</h2>
+  <p>Normally you send the task in words (<code>instruction</code>, any language the model understands). The model turns it into goal facts and constraints; the response shows what it understood in <code>goal</code> and <code>constraints</code>. You can also send them yourself, which skips the model call.</p>
+  <div class="tablewrap"><table>
+    <tr><th>Goal entry</th><th>Means</th></tr>
+    <tr><td><code>{"object": "a", "in": "red_zone"}</code></td><td>a ends directly in the zone</td></tr>
+    <tr><td><code>{"object": "a", "on": "b"}</code></td><td>a ends directly on b (a tower is several entries)</td></tr>
+    <tr><td><code>{"object": "a", "on": "table"}</code></td><td>a ends on the open table</td></tr>
+    <tr><td><code>{"sort_by_color": true}</code></td><td>every object into the zone of its own colour; the server expands it, and an explicit entry for one object overrides it</td></tr>
+    <tr><td><code>{"stack_by_color": true}</code></td><td>one stack per colour on the table; the planner chooses which object is the base and the order, for the fewest moves (four towers: 15 moves, proven shortest, about 1 s). Send it alone, without constraints</td></tr>
+  </table></div>
+  <div class="tablewrap"><table>
+    <tr><th>Constraint</th><th>Means</th><th>Said as</th></tr>
+    <tr><td><code>"no_table": true</code></td><td>nothing may be put down on the table</td><td>"don't use the table"</td></tr>
+    <tr><td><code>"keep": ["a"]</code></td><td>these objects must not be moved</td><td>"leave the blue cube"</td></tr>
+    <tr><td><code>"never_on": [["*", "b"]]</code></td><td>never place the first on the second</td><td>"never put anything on the red bar"</td></tr>
+    <tr><td><code>"first": ["a"]</code></td><td>this object moves before anything else</td><td>"start with the green cube"</td></tr>
+  </table></div>
+  <p>A constraint is kept only if the model quotes words that really are in the instruction, so the model cannot invent restrictions.</p>
+  <h3>Any other goal: a formula</h3>
+  <p>When no entry above fits, the model writes one <code>{"formula": F}</code> that says what must be true at the end. The server checks it (an unknown name or a wrong type gives an exact message and the model is asked again), expands <code>forall</code> / <code>exists</code> for the objects of the scene, searches for moves and verifies the plan twice: every action on the robot's domain, and the formula on the final arrangement. The response repeats the formula in plain words (<code>goal[0].in_words</code>).</p>
+  <div class="tablewrap"><table>
+    <tr><th>Part</th><th>Written as</th></tr>
+    <tr><td>combine</td><td><code>{"and": [F, ...]}</code> <code>{"or": [F, ...]}</code> <code>{"not": F}</code> <code>{"imply": [F, F]}</code></td></tr>
+    <tr><td>quantify</td><td><code>{"forall": {"x": "object"}, "where": F, "body": F}</code> and <code>{"exists": {"p": "place"}, "where": F, "body": F}</code></td></tr>
+    <tr><td>arrangement</td><td><code>{"on": [x, y]}</code> directly on · <code>{"on_table": [x]}</code> · <code>{"in": [x, place]}</code> · <code>{"clear": [x]}</code> nothing on it · <code>{"above": [x, y]}</code> somewhere above in a stack</td></tr>
+    <tr><td>fixed facts</td><td><code>{"color": [x, "red"]}</code> · <code>{"shape": [x, "cube"]}</code> · <code>{"same_color": [x, y]}</code> · <code>{"same_shape": [x, y]}</code> · <code>{"is": [x, y]}</code></td></tr>
+  </table></div>
+  <div class="codebox"><pre>"all cubes into the red zone":
+{"goal": [{"formula": {"forall": {"x": "object"},
+                       "where": {"shape": ["x", "cube"]},
+                       "body":  {"in": ["x", "red_zone"]}}}]}</pre></div>
+  <p>You can send such a goal yourself: <code>examples/requests/18_formula_cubes_to_red_zone.json</code>. Measured on the 16-object scene: "every stack one colour" written as a formula plans in about 1.3 s with 20 moves (the exact shortcut <code>stack_by_color</code> needs 15, proven shortest). The plan is verified but <b>not proven shortest</b>; the search keeps the best plan found within 8 s and says <code>no_plan</code> after that, because it cannot tell "impossible" from "not found yet". The robot's actions limit what a goal can ask for: only what stands on what, not positions or rotations.</p>
+</section>
+
+<section id="endpoints">
+  <h2><span class="n">5</span>Endpoints</h2>
+  <div class="tablewrap"><table>
+    <tr><th>Call</th><th>Use</th></tr>
+    <tr><td><code>POST /plan</code></td><td>task + scene JSON or photo → plan (main call)</td></tr>
+    <tr><td><code>POST /plan/upload</code></td><td>the same as a form with image files</td></tr>
+    <tr><td><code>POST /replan</code></td><td>the scene changed → keep the rest of the plan or plan again</td></tr>
+    <tr><td><code>POST /solve</code></td><td>scene + goal → plan, no model at all</td></tr>
+    <tr><td><code>POST /perceive</code></td><td>photo → scene JSON only</td></tr>
+    <tr><td><code>POST /camera/plan</code>, <code>/camera/replan</code></td><td>the same from a streamed camera</td></tr>
+    <tr><td><code>GET /health</code>, <code>/requests/{id}</code>, <code>/memory</code>, <code>/dashboard</code></td><td>status, logs, database, graphs</td></tr>
+  </table></div>
+
+  <div class="ep" id="ep-plan">
+    <h3><span class="verb">POST</span>/plan</h3>
+    <p>Send <code>scene</code> (preferred) or <code>images_b64</code>. With a scene, no image is read and only the goal is asked from the model.</p>
+    <div class="tablewrap"><table>
+      <tr><th>Field</th><th>Type</th><th>Default</th><th>Meaning</th></tr>
+      <tr><td><code>instruction</code></td><td>string</td><td>–</td><td>the task in words</td></tr>
+      <tr><td><code>scene</code></td><td>object</td><td>–</td><td>scene JSON (section 3)</td></tr>
+      <tr><td><code>images_b64</code></td><td>list of strings</td><td>–</td><td>JPEG/PNG as base64, used only without <code>scene</code></td></tr>
+      <tr><td><code>goal</code>, <code>constraints</code></td><td>list, object</td><td>–</td><td>give the task directly, skips the goal model call</td></tr>
+      <tr><td><code>places</code></td><td>list</td><td>–</td><td>fixed zones to add to what the camera sees (zones outside the photo)</td></tr>
+      <tr><td><code>resolution</code></td><td>string or number</td><td>full</td><td><code>low</code> · <code>medium</code> · <code>high</code> · <code>full</code> · pixels · <code>auto</code> (section 8)</td></tr>
+      <tr><td><code>crop</code></td><td>[x0, y0, x1, y1]</td><td>–</td><td>keep only the work area, fractions 0–1</td></tr>
+      <tr><td><code>attempts</code></td><td>1–5</td><td>3</td><td>retries when the model writes something unreadable</td></tr>
+      <tr><td><code>planner</code></td><td>string</td><td>auto</td><td><code>auto</code>, <code>fast-downward</code>, <code>fast-downward-opt</code>, <code>pyperplan</code></td></tr>
+    </table></div>
+    <div class="codebox"><pre>{"instruction": "Sort the objects by colour into the zones.",
+ "images_b64": ["/9j/4AAQSkZJRg..."],
+ "resolution": "auto",
+ "places": [{"id": "red_zone", "color": "red", "capacity": 4}, {"id": "blue_zone", "color": "blue", "capacity": 4}]}</pre></div>
+  </div>
+
+  <div class="ep" id="ep-upload">
+    <h3><span class="verb">POST</span>/plan/upload</h3>
+    <p>Multipart form, handy from the command line. Fields: <code>instruction</code> (required), <code>files</code> (one or more images) or <code>scene</code> (JSON text), <code>resolution</code>, <code>crop</code> (JSON text), <code>planner</code>, <code>attempts</code>.</p>
+    <div class="codebox"><pre>curl -s http://192.168.73.15:8010/plan/upload \
+     -F instruction='Sort the objects by colour into the zones.' \
+     -F files=@towers.jpg -F resolution=medium</pre></div>
+  </div>
+
+  <div class="ep" id="ep-replan">
+    <h3><span class="verb">POST</span>/replan</h3>
+    <p>The scene changed: the robot made progress, a step failed, or a person moved something. Reuses the goal already understood; the model is not called.</p>
+    <div class="codebox"><pre>{"request_id": "20261120_101512_ab12cd",   // from the /plan answer (or the last /replan)
+ "scene": { ...the scene as it is NOW... }}</pre></div>
+    <p>Answer: like <code>/plan</code>, plus <code>decision</code> (<code>kept</code> or <code>replanned</code>), <code>changes</code> and, when kept, <code>done_actions</code>.</p>
+  </div>
+
+  <div class="ep" id="ep-solve">
+    <h3><span class="verb">POST</span>/solve</h3>
+    <p>Planner only: <code>{"scene": {...}, "goal": [...], "planner": "auto"}</code>. Useful to test scenes without a model.</p>
+  </div>
+
+  <div class="ep" id="ep-perceive">
+    <h3><span class="verb">POST</span>/perceive</h3>
+    <p>Form with <code>files</code> (and optional <code>resolution</code>, <code>crop</code>). Returns <code>scene</code>: what the model sees. Use it to check perception before planning.</p>
+  </div>
+
+  <div class="ep" id="ep-camera">
+    <h3><span class="verb">POST</span>/camera/plan · /camera/replan</h3>
+    <p><code>scripts/camera_client.py</code> streams a camera with <code>POST /stream/{cam}</code> (one JPEG per request). Then <code>/camera/plan</code> takes <code>{"camera_id": "cam0", "instruction": "..."}</code> and <code>/camera/replan</code> takes <code>{"camera_id": "cam0", "request_id": "..."}</code>, both with optional <code>resolution</code>, <code>crop</code>, <code>max_age_s</code> (default 5 s). Live view: <code>GET /stream/{cam}.mjpg</code>; list: <code>GET /streams</code>.</p>
+  </div>
+
+  <div class="ep" id="ep-misc">
+    <h3><span class="verb get">GET</span>/health · /requests/{id} · /memory · /dashboard</h3>
+    <ul class="plain">
+      <li><code>/health</code>: model, quantization, uptime, number of requests.</li>
+      <li><code>/requests/{id}</code>: the logged request and answer (also on disk in <code>logs/requests/&lt;id&gt;/</code>).</li>
+      <li><code>/memory</code>: what the experience database holds. <code>POST /memory/clear?kind=goal</code> empties one kind (<code>scene</code>, <code>goal</code>, <code>plan</code>) or all.</li>
+      <li><code>/dashboard?last=50</code>: graphs of time per request and stage, database hits, resolution, outcomes.</li>
+      <li><code>/domain</code>: the fixed PDDL domain. <code>/examples</code>: example cases for the test page.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="responses">
+  <h2><span class="n">6</span>Responses</h2>
+  <div class="tablewrap"><table>
+    <tr><th>status</th><th>Meaning</th><th>What the laptop does</th></tr>
+    <tr><td><span class="pill ok">ok</span></td><td>plan found and checked on the scene</td><td>execute <code>plan</code> step by step</td></tr>
+    <tr><td><span class="pill warn">clarify</span></td><td>the instruction is unclear or names something not in the scene; question in <code>message</code></td><td>ask the user, send again</td></tr>
+    <tr><td><span class="pill warn">need_observation</span></td><td>where an object stands is unknown</td><td>take another view, send the scene again</td></tr>
+    <tr><td><span class="pill bad">no_plan</span></td><td>impossible, reason in <code>message</code> (e.g. a zone has fewer spots than objects for it)</td><td>report it</td></tr>
+    <tr><td><span class="pill bad">error</span></td><td>the scene is physically impossible, or the model's answer could not be read</td><td>check <code>message</code>, send a corrected scene</td></tr>
+  </table></div>
+  <h3>Plan steps</h3>
+  <div class="tablewrap"><table>
+    <tr><th>action</th><th>args</th><th>Robot does</th></tr>
+    <tr><td><code>pick-from-table</code></td><td>object</td><td>grasp an object standing on the table</td></tr>
+    <tr><td><code>pick-from-item</code></td><td>object, object below</td><td>grasp an object from the top of another</td></tr>
+    <tr><td><code>pick-from-place</code></td><td>object, slot, place</td><td>grasp an object from a zone</td></tr>
+    <tr><td><code>place-on-table</code></td><td>object</td><td>put it on a free spot of the table</td></tr>
+    <tr><td><code>place-on-item</code></td><td>object, object below</td><td>put it on top of another object</td></tr>
+    <tr><td><code>place-in</code></td><td>object, slot, place</td><td>put it into a zone (the slot is a free spot in it)</td></tr>
+    <tr><td><code>observe</code></td><td>object</td><td>take another view of a hidden object</td></tr>
+  </table></div>
+  <h3>Example answer (shortened)</h3>
+  <div class="codebox"><pre>{
+  "request_id": "20261120_101512_ab12cd",
+  "status": "ok",
+  "goal": [{"object": "green_bar_1", "in": "green_zone"}, {"object": "blue_block_1", "in": "blue_zone"}, ...],
+  "plan": [
+    {"action": "pick-from-item", "args": ["blue_block_2", "green_cube_1"]},
+    {"action": "place-in",       "args": ["blue_block_2", "blue_zone_s4", "blue_zone"]},
+    {"action": "pick-from-item", "args": ["blue_cube_1", "green_bar_2"]},
+    {"action": "place-in",       "args": ["blue_cube_1", "blue_zone_s3", "blue_zone"]},
+    ...                                                   32 actions in total
+  ],
+  "quality": {"moves": 16, "lower_bound": 16, "optimal": true,
+              "proof": "the plan moves only objects that must move, each once",
+              "max_extra_moves": 0, "moved_more_than_once": []},
+  "timings": {"plan_s": 0.565, "total_s": 0.678}
+}</pre></div>
+  <div class="tablewrap"><table>
+    <tr><th>Field</th><th>Meaning</th></tr>
+    <tr><td><code>quality</code></td><td><code>optimal</code> true means proven shortest: either the moves equal <code>lower_bound</code> (objects that must move at least once), or the optimal search <code>astar(lmcut())</code> found it. <code>moved_more_than_once</code> lists objects that had to be parked on the way.</td></tr>
+    <tr><td><code>timings</code></td><td><code>perceive_s</code> (image to scene), <code>goal_s</code> (instruction to goal), <code>plan_s</code>, <code>total_s</code>, in seconds</td></tr>
+    <tr><td><code>memory</code></td><td><code>hit</code> means the answer came from the experience database (same input as before), <code>miss</code> means it was computed</td></tr>
+    <tr><td><code>resolution</code></td><td>for photos: level used and every level tried, with image tokens and bytes</td></tr>
+    <tr><td><code>scene</code>, <code>warnings</code></td><td>the scene as the server understood it, and what it corrected (e.g. a repeated id)</td></tr>
+  </table></div>
+  <p>The example is the measured answer of <code>/solve</code> for the four-tower scene, which needs no model. With an instruction, <code>timings</code> also contains <code>goal_s</code>, and with a photo <code>perceive_s</code>; with the database on, <code>memory</code> is added.</p>
+</section>
+
+<section id="replan">
+  <h2><span class="n">7</span>Replanning</h2>
+  <ul class="plain">
+    <li>After every move (or when something looks different), send the new scene to <code>/replan</code> with the newest <code>request_id</code>.</li>
+    <li><span class="pill ok">kept</span>: the scene is one the old plan passes through. The rest of the plan comes back, still proven shortest.</li>
+    <li><span class="pill warn">replanned</span>: anything else. A new plan from the new scene, same goal and constraints, in about 0.15 s, without the model.</li>
+    <li>A failed grasp leaves the scene unchanged, so the same step comes back: an automatic retry.</li>
+    <li>A new object on top is cleared first. If an object the task needs is gone, the answer is <span class="pill warn">clarify</span>.</li>
+  </ul>
+</section>
+
+<section id="images">
+  <h2><span class="n">8</span>Images and resolution</h2>
+  <div class="tablewrap"><table>
+    <tr><th>resolution</th><th>Longest side</th><th>Image tokens (your photos)</th><th>Size</th></tr>
+    <tr><td><code>low</code></td><td>448 px</td><td>about 117</td><td>18 kB</td></tr>
+    <tr><td><code>medium</code></td><td>768 px</td><td>about 348</td><td>43 kB</td></tr>
+    <tr><td><code>high</code></td><td>1280 px</td><td>about 929</td><td>103 kB</td></tr>
+    <tr><td><code>full</code></td><td>as sent</td><td>up to 1024</td><td>248 kB</td></tr>
+  </table></div>
+  <p><code>auto</code> tries <code>low</code> first and goes higher only if the scene is unreliable (unknown support, hidden object, unreadable answer, or the instruction names something not seen). <code>crop</code> keeps only the work area. Zones that are outside the photo are sent in <code>places</code>. The JSON path needs no image at all and is the fastest.</p>
+</section>
+
+<section id="errors">
+  <h2><span class="n">9</span>Errors and fixes</h2>
+  <div class="tablewrap"><table>
+    <tr><th>HTTP</th><th>When</th></tr>
+    <tr><td><code>400</code></td><td>bad base64 image, crop or scene not valid JSON, stream body not a JPEG</td></tr>
+    <tr><td><code>404</code></td><td>unknown <code>request_id</code>, database switched off</td></tr>
+    <tr><td><code>409</code></td><td>no camera frame yet, or the last frame is older than <code>max_age_s</code></td></tr>
+    <tr><td><code>422</code></td><td>a field has the wrong type, an unknown resolution or crop</td></tr>
+    <tr><td><code>503</code></td><td>no model loaded (photos need one), graphs without matplotlib</td></tr>
+  </table></div>
+  <div class="tablewrap"><table>
+    <tr><th>Problem</th><th>Cause</th><th>Fix</th></tr>
+    <tr><td>"not in the scene" with a photo</td><td>the zones are not visible in the picture</td><td>send them in <code>places</code>, or use the JSON path</td></tr>
+    <tr><td><code>clarify</code>: "the goal formula is invalid: ..."</td><td>the model wrote a formula with an unknown name, operator or type</td><td>the server asks again; if it persists, send a corrected <code>goal</code> yourself</td></tr>
+    <tr><td><code>clarify</code>: "the model wrote an empty goal"</td><td>the model did not turn the instruction into goal entries (seen with qwen3-vl-4b for "sort by colour" before <code>sort_by_color</code> existed)</td><td>the server asks the model again; if it persists, send <code>"goal": [{"sort_by_color": true}]</code> yourself</td></tr>
+    <tr><td>objects of one colour mixed up</td><td>same id for several objects</td><td>one id per object; the server now resolves repeats by physics or asks</td></tr>
+    <tr><td><code>no_plan</code> for sorting</td><td>a zone has fewer spots than objects of its colour</td><td>raise <code>capacity</code>, or use a box</td></tr>
+    <tr><td>first start takes long</td><td>the model is downloaded once (8B about 17 GB)</td><td>let it finish; set <code>HF_TOKEN</code> for faster downloads</td></tr>
+    <tr><td>works on HEKATE, not from the laptop</td><td>port forwarding missing after a restart</td><td>see section 10</td></tr>
+    <tr><td>Tailscale address hangs, LAN address works</td><td>Tailscale blocks incoming connections</td><td><code>tailscale set --shields-up=false</code> on HEKATE, check access rules</td></tr>
+  </table></div>
+</section>
+
+<section id="network">
+  <h2><span class="n">10</span>Network</h2>
+  <p>The server runs in WSL on HEKATE; Windows forwards port 8010 to it. WSL gets a new internal address after a restart, so the forwarding is redone then. In a normal PowerShell, read the address:</p>
+  <div class="codebox"><pre>(wsl hostname -I).Trim().Split(' ')[0]</pre></div>
+  <p>Then in PowerShell as Administrator, with that address:</p>
+  <div class="codebox"><pre>$ip = '172.30.191.115'        # the address you just read; it changes after a restart
+netsh interface portproxy delete v4tov4 listenaddress=0.0.0.0 listenport=8010
+netsh interface portproxy add v4tov4 listenaddress=0.0.0.0 listenport=8010 connectaddress=$ip connectport=8010
+netsh interface portproxy show v4tov4</pre></div>
+  <p>The firewall rule "WSL planner 8010" stays. Start the server in WSL with <code>./serve.sh start qwen3-vl-8b 4bit</code> (or <code>qwen3-vl-2b bf16</code> for speed).</p>
+</section>
+
+<section id="open">
+  <h2><span class="n">11</span>Open points</h2>
+  <ul class="plain">
+    <li>Model times in this page are not measured yet on HEKATE; <code>/dashboard</code> shows them once requests run.</li>
+    <li>The faster models (Qwen3-VL-2B, Qwen3.5, LFM2.5-VL) are configured but not yet compared: <code>scripts/compare_models.sh</code>.</li>
+    <li>No retry limit in <code>/replan</code>: a grasp that always fails comes back every time.</li>
+    <li>"Shortest" counts pick and place moves for the scene as understood; arm travel distance is not part of it.</li>
+    <li>A scene sent while an object is held in the gripper cannot be described; send scenes between moves.</li>
+  </ul>
+</section>
+
+</div>
+</main>
+<footer><div class="wrap">Source: <code>server.py</code>, <code>openworld.py</code>, <code>docs/api.html</code> in the vlm_pddl repository. Numbers from runs on 20 Nov 2026.</div></footer>
+
+<script>
+document.querySelectorAll('.copy').forEach(function (b) {
+  b.addEventListener('click', function () {
+    var el = document.getElementById(b.dataset.target);
+    var text = el.innerText;
+    var done = function () { b.textContent = 'Copied'; setTimeout(function () { b.textContent = 'Copy'; }, 1500); };
+    var fallback = function () {
+      var r = document.createRange(); r.selectNodeContents(el);
+      var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+      b.textContent = 'Selected: press Ctrl+C';
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, fallback);
+    } else { fallback(); }
+  });
+});
+</script>

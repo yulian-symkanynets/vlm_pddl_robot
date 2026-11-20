@@ -85,6 +85,8 @@ class PlanRequest(BaseModel):
     resolution: str | int | None = Field(None, description='image detail: low | medium | high | full | '
                                          '<max side in px> | auto (low first, more only if needed)')
     crop: list[float] | None = Field(None, description='[x0, y0, x1, y1] fractions 0..1: the work area')
+    places: list | None = Field(None, description='fixed places of the lab (zones, boxes) to add to what the camera '
+                                              'sees, e.g. [{"id": "red_zone", "color": "red", "capacity": 4}]')
 
 
 class ReplanRequest(BaseModel):
@@ -224,7 +226,7 @@ def create_app(vlm, max_visual_tokens: int = 1024, log_dir: Path = LOG_DIR, memo
         received = len(json.dumps(req.scene)) if req.scene else sum(len(x) for _, x in blobs)
         res = plan_images(images, req.resolution, req.crop, attempts=req.attempts,
                           instruction=req.instruction, scene=req.scene, goal=req.goal,
-                          planner=req.planner, constraints=req.constraints)
+                          planner=req.planner, constraints=req.constraints, places=req.places)
         return finish(rid, d, {**body, 'images': [p.name for p in images]}, res, received)
 
     @app.post('/plan/upload')
