@@ -260,3 +260,90 @@ def test_server_time_and_gzip_both_ways(client):
     assert int(r.headers['content-length']) < len(r.content)            # compressed on the wire
     bad = client.post('/solve', content=b'nope', headers={'Content-Type': 'application/json', 'Content-Encoding': 'gzip'})
     assert bad.status_code == 400
+
+
+# ------------------------------------------------------------------- round 3 (farby: exact search, /check)
+def zone_scene(seed, n_per_colour=2, colours=('red', 'blue')):
+    rnd = random.Random(seed)
+    objs = [{'id': f'{c}_plank', 'color': c, 'size_mm': 80, 'height_mm': 20, 'on': f'{c}_zone'} for c in colours]
+    rest = [{'id': f'{c}_{k}', 'color': c, 'size_mm': rnd.choice([25, 30, 40]), 'height_mm': 30}
+            for c in colours for k in range(n_per_colour)]
+    rnd.shuffle(rest)
+    tops = {}
+    for k, o in enumerate(rest):
+        o['on'] = tops.get(k % 2, 'table')
+        tops[k % 2] = o['id']
+    zones = [{'id': f'{c}_zone', 'color': c, 'capacity': 1, 'max_height_mm': 110} for c in colours]
+    return {'objects': objs + rest, 'zones': zones}
+
+
+def test_explain_agrees_with_the_search_rules():
+    for seed in range(15):
+        scene = zone_scene(seed, 3)
+        sc = openworld.normalize_scene(scene)
+        cons = {'keep': ['red_plank'], 'never_on': [['blue_0', 'red_1']]} if seed % 2 else {'no_table': True}
+        mover, sup = formula_plan.Mover(sc, cons), dict(sc['support'])
+        rnd = random.Random(seed)
+        for _ in range(6):                                   # several arrangements along random moves
+            allowed = set(mover.moves(sup))
+            for x in sc['items']:
+                for dst in ['table', *sc['items'], *sc['env']['places']]:
+                    if x in sup and dst != sup.get(x):
+                        assert ((x, dst) in allowed) == (formula_plan.explain(mover, sup, x, dst) is None), (seed, x, dst)
+            if not allowed:
+                break
+            x, dst = rnd.choice(sorted(allowed))
+            sup[x] = dst
+
+
+@pytest.mark.parametrize('seed', range(8))
+def test_zone_towers_exact_search_is_truly_shortest(seed):
+    scene = zone_scene(seed)
+    sc = openworld.normalize_scene(scene)
+    cons = {'no_table': True, 'keep': ['red_plank', 'blue_plank']} if seed % 2 else {}
+    zone_of = {'red': 'red_zone', 'blue': 'blue_zone'}
+    import goal_logic
+    goal = goal_logic.compile_goal(goal_logic.stack_in_zones_formula(zone_of), sc)
+    mover = formula_plan.Mover(sc, cons)
+    start = dict(sc['support'])
+    q, seen, best = collections.deque([(start, 0)]), {tuple(sorted(start.items()))}, None
+    while q:                                                 # plain breadth-first: the true shortest
+        sup, d = q.popleft()
+        if goal.holds(goal_logic.View(sup, sc['items'])):
+            best = d
+            break
+        for x, dst in mover.moves(sup):
+            new = {**sup, x: dst}
+            k = tuple(sorted(new.items()))
+            if k not in seen:
+                seen.add(k)
+                q.append((new, d + 1))
+    r = openworld.run(scene=scene, goal=[{'stack_in_zones': True}], constraints=cons)
+    if best is None:
+        assert r['status'] == 'no_plan'
+    else:
+        assert r['status'] == 'ok' and r['quality']['moves'] == best and r['quality']['optimal'], (seed, best, r['quality'])
+
+
+def test_check_accepts_our_plans_and_names_the_rejected_step(client):
+    cons = {'no_table': True, 'keep': ['red_plank', 'blue_plank']}
+    goal = [{'stack_in_zones': True}]
+    for seed in range(20):                                   # the first solvable random scene
+        scene = zone_scene(seed, 3)
+        answer = client.post('/solve', json={'scene': scene, 'goal': goal, 'constraints': cons, 'compact': True}).json()
+        if answer['status'] == 'ok' and answer['plan']:
+            break
+    plan = answer['plan']
+    ok = client.post('/check', json={'scene': scene, 'goal': goal, 'constraints': cons, 'plan': plan}).json()
+    assert ok['status'] == 'ok' and ok['goal_reached'] and ok['moves'] == len(plan) // 2
+    sup = {o['id']: o['on'] for o in scene['objects']}
+    top = next(x for x in sup if x not in sup.values() and not sup[x].endswith('_zone'))
+    bad = [f'pick-from-{"table" if sup[top] == "table" else "item"} {top}' + ('' if sup[top] == 'table' else f' {sup[top]}'),
+           f'place-on-table {top}']
+    r = client.post('/check', json={'scene': scene, 'goal': goal, 'constraints': cons, 'plan': bad}).json()
+    assert r['status'] == 'rejected' and r['step'] == 2 and 'table may not be used' in r['reason']
+    r = client.post('/check', json={'scene': scene, 'goal': goal, 'constraints': cons,
+                                    'plan': ['pick-from-place red_plank red_zone_s1 red_zone']}).json()
+    assert r['status'] == 'rejected' and r['step'] == 1 and ('keep' in r['reason'] or 'has something on it' in r['reason'])
+    r = client.post('/check', json={'scene': scene, 'goal': goal, 'constraints': cons, 'plan': []}).json()
+    assert r['status'] == 'rejected' and 'goal is not reached' in r['reason']

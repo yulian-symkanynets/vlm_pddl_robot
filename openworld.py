@@ -621,7 +621,8 @@ def plan_for(sc: dict, goal, planner: str = 'auto', constraints: dict | None = N
             return plan_formula(sc, json.dumps(goal_logic.STACK_BY_COLOUR, sort_keys=True), cons, lower_bound=lb)
         if all(g[0] in FIXED for g in goal):
             return plan_formula(sc, json.dumps(fixed_to_formula(goal), sort_keys=True), cons, lower_bound=lb,
-                                must_move=plan_quality.must_move(sc['support'], sc['items'], goal))
+                                must_move=plan_quality.must_move(sc['support'], sc['items'], goal),
+                                exact=lambda sup: len(plan_quality.must_move(sup, sc['items'], goal)))
     stack = bool(goal) and all(g[0] == 'col-ok' for g in goal)      # one stack per colour
     ptext = make_problem('openworld', sc['env'], sc['items'], sc['support'], goal, sc['hidden'])
     domain_pddl, domain_path = None, None
@@ -712,7 +713,7 @@ def verify_acts(sc: dict, acts, cons: dict):
 
 
 def plan_formula(sc: dict, formula_json: str, cons: dict, heuristic=None, lower_bound: int | None = None,
-                 label: str = 'goal-search', must_move: list | None = None) -> dict:
+                 label: str = 'goal-search', must_move: list | None = None, exact=None) -> dict:
     """General goal: search for moves (formula_plan.py), then check the plan three times: the domain's
     simulator (every action allowed under the constraints), the scene's limits (sizes, tower height),
     and the formula on the final arrangement. `lower_bound` (moves no plan can avoid) gives a proof
@@ -724,7 +725,7 @@ def plan_formula(sc: dict, formula_json: str, cons: dict, heuristic=None, lower_
     if sc['hidden']:
         return {**base, 'status': 'no_plan', 'plan': None, 'planner_status': 'unsupported',
                 'message': 'this goal needs every object visible; hidden: ' + ', '.join(sc['hidden'])}
-    found = formula_plan.find_moves(sc, goal, cons, heuristic=heuristic)
+    found = formula_plan.find_moves(sc, goal, cons, heuristic=heuristic, exact=exact)
     base.update(plan_s=found['seconds'], planner_status='solved_satisficing' if found['moves'] is not None else 'unsolved')
     if found['moves'] is None:
         return {**base, 'status': 'no_plan', 'message': found['reason'], 'plan': None}
@@ -740,11 +741,13 @@ def plan_formula(sc: dict, formula_json: str, cons: dict, heuristic=None, lower_
     ok = sim['ok'] and holds and broken is None
     n = len(found['moves'])
     picked = [x for x, _ in found['moves']]
-    proven = n == 0 or (lower_bound is not None and n == lower_bound)
+    at_bound = lower_bound is not None and n == lower_bound
+    proven = n == 0 or at_bound or bool(found.get('optimal'))
     quality = {'moves': n, 'lower_bound': lower_bound, 'optimal': proven,
                'proof': 'the goal already holds' if n == 0 else
-               'the plan moves only objects that must move, each once' if proven else None,
-               'max_extra_moves': n - lower_bound if lower_bound is not None else None,
+               'the plan moves only objects that must move, each once' if at_bound else
+               'exact search (A*, the estimate never overestimates)' if proven else None,
+               'max_extra_moves': 0 if proven else n - lower_bound if lower_bound is not None else None,
                'moved_more_than_once': sorted({x for x in picked if picked.count(x) > 1}),
                'note': None if proven else
                f'verified, not proven shortest (first plan {found["first"]} moves, best found {n}, '
@@ -796,7 +799,7 @@ def plan_zone_stacks(sc: dict, zone_json: str, cons: dict) -> dict:
     guide = lambda sup: colour_stacks.zone_unsettled(sup, colour, zone_of)       # noqa: E731
     must = colour_stacks.zone_unsettled_set(sc['support'], colour, zone_of)
     return plan_formula(sc, json.dumps(goal_logic.stack_in_zones_formula(zone_of), sort_keys=True), cons,
-                        heuristic=guide, lower_bound=len(must), label='zone-towers', must_move=must)
+                        heuristic=guide, lower_bound=len(must), label='zone-towers', must_move=must, exact=guide)
 
 
 def _fact_holds(f, sup: dict) -> bool:
@@ -919,6 +922,81 @@ def plan_ordered_staged(sc: dict, goal, planner: str, cons: dict) -> dict:
             'plan_s': round(time.perf_counter() - t0, 3), 'problem_pddl': ptext, 'quality': quality,
             'verified': ok, 'order': order, 'plan': steps,
             'message': None if ok else 'plan failed verification: ' + (sim['fail_reason'] or 'goals not met in order')}
+
+
+def check_plan(scene: dict, goal, plan: list, constraints: dict | None = None, ordered: bool = False) -> dict:
+    """Replay a plan made elsewhere under this server's rules: the first step it would reject and why,
+    whether the goal is reached, and how it compares with the lower bound. Steps: "action arg ..."
+    strings or {"action", "args"} dicts, in the robot's action names."""
+    import formula_plan
+    import goal_logic
+    import pddl_task
+    try:
+        sc = normalize_scene(scene)
+    except SceneError as e:
+        return {'status': 'error', 'message': f'scene: {e}'}
+    grounded, problem = resolve_goal(goal, sc)
+    if problem:
+        return {'status': 'error', 'message': problem}
+    cons, problems = pddl_task.normalize_constraints(constraints, sc)
+    if problems:
+        return {'status': 'error', 'message': '; '.join(problems)}
+    mover = formula_plan.Mover(sc, cons)
+    first = cons.get('first')
+    first = first[0] if isinstance(first, list) and first else first
+    sup, held, moves, steps = dict(sc['support']), None, [], []
+    for i, raw in enumerate(plan or [], 1):
+        a, args = _parse_step(raw, [])
+        if not a or not args:
+            return {'status': 'rejected', 'step': i, 'reason': f'cannot read step {raw!r}', 'moves_checked': len(moves)}
+        a = a.replace('pick-first-', 'pick-')
+        steps.append({'action': a, 'args': args})
+        x = args[0]
+        if a.startswith('pick'):
+            if held:
+                return {'status': 'rejected', 'step': i, 'reason': f'the hand already holds {held}', 'moves_checked': len(moves)}
+            where = {'pick-from-table': 'table', 'pick-from-item': args[1] if len(args) > 1 else None,
+                     'pick-from-place': args[-1]}.get(a)
+            if sup.get(x) != where:
+                return {'status': 'rejected', 'step': i, 'reason': f'{x} is on {sup.get(x)}, the step says {where}',
+                        'moves_checked': len(moves)}
+            why = (f'{x} has something on it' if x in sup.values() else
+                   f'{x} must stay where it is (keep)' if x in mover.keep else
+                   f'the first object to move must be {first}' if first and not moves and x != first else None)
+            if why:                                       # report a forbidden pick at the pick itself
+                return {'status': 'rejected', 'step': i, 'reason': why, 'moves_checked': len(moves)}
+            held = x
+        elif a.startswith('place'):
+            if held != x:
+                return {'status': 'rejected', 'step': i, 'reason': f'{x} is not in the hand', 'moves_checked': len(moves)}
+            dst = {'place-on-table': 'table', 'place-on-item': args[1] if len(args) > 1 else None,
+                   'place-in': args[-1]}.get(a)
+            why = formula_plan.explain(mover, sup, x, dst, first if not moves else None)
+            if why:
+                return {'status': 'rejected', 'step': i, 'move': len(moves) + 1, 'reason': why, 'moves_checked': len(moves)}
+            sup[x], held = dst, None
+            moves.append((x, dst))
+        elif a != 'observe':
+            return {'status': 'rejected', 'step': i, 'reason': f'unknown action {a}', 'moves_checked': len(moves)}
+    if held:
+        return {'status': 'rejected', 'step': len(plan or []), 'reason': f'the plan ends with {held} in the hand',
+                'moves_checked': len(moves)}
+    if grounded and grounded[0][0] == 'zstack':
+        formula = goal_logic.stack_in_zones_formula(json.loads(grounded[0][1]))
+    elif grounded and grounded[0][0] == 'formula':
+        formula = json.loads(grounded[0][1])
+    elif grounded and all(g[0] == 'col-ok' for g in grounded):
+        formula = goal_logic.STACK_BY_COLOUR
+    else:
+        formula = fixed_to_formula(grounded)
+    reached = goal_logic.compile_goal(formula, sc).holds(goal_logic.View(sup, sc['items']))
+    out = {'status': 'ok' if reached else 'rejected', 'moves': len(moves), 'goal_reached': reached,
+           'final': sup, 'reason': None if reached else 'every step is allowed, but the goal is not reached'}
+    if ordered and grounded and all(g[0] in FIXED for g in grounded):
+        out['order'] = order_check(sc['support'], steps, grounded)
+        if not out['order']['in_order']:
+            out.update(status='rejected', reason='the goals are not met in the given order')
+    return out
 
 
 def colour_stack_plan(sc: dict):

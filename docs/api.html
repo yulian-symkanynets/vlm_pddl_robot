@@ -284,6 +284,7 @@ else:
     <tr><td><code>POST /plan/upload</code></td><td>the same as a form with image files</td></tr>
     <tr><td><code>POST /replan</code></td><td>the scene changed → keep the rest of the plan or plan again</td></tr>
     <tr><td><code>POST /solve</code></td><td>scene + goal → plan, no model at all</td></tr>
+    <tr><td><code>POST /check</code></td><td>replay a plan made elsewhere under the server's rules: the first step it rejects and why</td></tr>
     <tr><td><code>POST /perceive</code></td><td>photo → scene JSON only</td></tr>
     <tr><td><code>POST /camera/plan</code>, <code>/camera/replan</code></td><td>the same from a streamed camera</td></tr>
     <tr><td><code>GET /health</code>, <code>/requests/{id}</code>, <code>/memory</code>, <code>/dashboard</code></td><td>status, logs, database, graphs</td></tr>
@@ -332,6 +333,11 @@ else:
   <div class="ep" id="ep-solve">
     <h3><span class="verb">POST</span>/solve</h3>
     <p>Planner only: <code>{"scene": {...}, "goal": [...], "constraints": {...}, "ordered": false, "compact": false}</code>. Constraints work here exactly as in <code>/plan</code>.</p>
+  </div>
+
+  <div class="ep" id="ep-check">
+    <h3><span class="verb">POST</span>/check</h3>
+    <p><code>{"scene": {...}, "goal": [...], "constraints": {...}, "plan": ["pick-from-item a b", "place-on-item a c", ...], "ordered": false}</code>. Steps as <code>"action arg ..."</code> strings (the compact format) or <code>{"action", "args"}</code>. Answer: <code>status</code> <code>ok</code> (every step allowed and the goal reached) or <code>rejected</code> with <code>step</code> (1-based) and <code>reason</code>, e.g. <code>"the tower on red_zone would be 5 objects / 150 mm, over its limit"</code>, <code>"x (40 mm) is larger than y (25 mm)"</code>, <code>"the table may not be used"</code>. Uses exactly the rules the planner uses.</p>
   </div>
 
   <div class="ep" id="ep-perceive">

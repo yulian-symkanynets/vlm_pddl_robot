@@ -113,6 +113,61 @@ class Mover:
                     yield x, dst
 
 
+def explain(mover: 'Mover', sup: dict, x: str, dst: str, first: str | None = None) -> str | None:
+    """Why may object x NOT go to dst in arrangement sup? None if the move is allowed. The same rules as
+    Mover.moves (a test checks that both agree), written out so a rejected step can be explained."""
+    items, places = mover.items, mover.places
+    if x not in items or x not in sup:
+        return f'{x} is not an object of the scene'
+    if x in sup.values():
+        return f'{x} cannot be picked: {next(y for y, v in sup.items() if v == x)} is on it'
+    if x in mover.keep:
+        return f'{x} must stay where it is (keep)'
+    if first and x != first:
+        return f'the first object to move must be {first}'
+    if dst == sup[x]:
+        return f'{x} is already on {dst}'
+    if dst == 'table':
+        if mover.no_table or (x, 'table') in mover.never:
+            return 'the table may not be used (no_table / never_on)'
+        return None
+    if dst in items:
+        if dst == x:
+            return f'{x} cannot go on itself'
+        if dst in sup.values() or dst not in sup:
+            return f'{dst} is not free: something is on it'
+        if dst in mover.no_top:
+            return f'nothing can stand on {dst} (no flat top)'
+        if (x, dst) in mover.never:
+            return f'{x} may never be put on {dst} (never_on)'
+        if mover.size_rule and mover.size[x] and mover.size[dst] and mover.size[x] > mover.size[dst] + 1e-6:
+            return f'{x} ({mover.size[x]:g} mm) is larger than {dst} ({mover.size[dst]:g} mm)'
+        if mover.towers:
+            n, height, cur = 1, mover.h[dst], dst
+            while sup.get(cur) in items:
+                cur = sup[cur]
+                n, height = n + 1, height + mover.h[cur]
+            root = sup.get(cur)
+            if not mover._limit_ok(root, n + 1, height + mover.h[x]):
+                return (f'the tower on {root} would be {n + 1} objects / {height + mover.h[x]:g} mm, '
+                        f'over its limit')
+        return None
+    if dst in places:
+        d = places[dst]
+        if not d.get('open', True):
+            return f'{dst} has a closed lid'
+        if sum(1 for v in sup.values() if v == dst) >= int(d.get('slots', 1)):
+            return f'{dst} is full ({d.get("slots", 1)} slots)'
+        if not mover.fits[(x, dst)]:
+            return f'{x} is too tall for {dst}'
+        if (x, dst) in mover.never:
+            return f'{x} may never be put in {dst} (never_on)'
+        if mover.towers and not mover._limit_ok(dst, 1, mover.h[x]):
+            return f'{x} alone is over the height limit of {dst}'
+        return None
+    return f'unknown target {dst}'
+
+
 def check_moves(sc: dict, moves, cons: dict | None = None) -> str | None:
     """Replay moves with the same rules as the search. -> None, or the first rule a move breaks."""
     mover, sup = Mover(sc, cons or {}), dict(sc['support'])
@@ -125,8 +180,11 @@ def check_moves(sc: dict, moves, cons: dict | None = None) -> str | None:
     return None
 
 
+EXACT_NODES = 60_000             # exact phase (plain A*) when a lower-bound estimate is known
+
+
 def find_moves(sc: dict, goal: goal_logic.Goal, cons: dict | None = None, limit_s: float | None = None,
-               heuristic=None) -> dict:
+               heuristic=None, exact=None) -> dict:
     """-> {'moves': [(object, destination)] or None, 'first': n, 'expanded': n, 'seconds': s,
            'reason': text if no plan}.  `heuristic(support) -> int` replaces the default guide
     (requirements of the formula that do not hold yet); the goal test is always the formula."""
@@ -150,10 +208,11 @@ def find_moves(sc: dict, goal: goal_logic.Goal, cons: dict | None = None, limit_
 
     stopped = ['done']
 
-    def run(weight, budget, bound):
+    def run(weight, budget, bound, guide=None):
+        hf = guide or h
         key = lambda s: tuple(sorted(s.items()))            # noqa: E731
         tie = itertools.count()
-        h0 = h(start)
+        h0 = hf(start)
         pq = [(weight * h0, h0, 0, next(tie), start, [])]
         seen = {key(start): 0}
         used = 0
@@ -178,14 +237,24 @@ def find_moves(sc: dict, goal: goal_logic.Goal, cons: dict | None = None, limit_
                 if seen.get(k, 1 << 30) <= g + 1:
                     continue
                 seen[k] = g + 1
-                hn = h(new)
+                hn = hf(new)
                 if hn == 0 and not done(new):
                     hn = 1                                    # the guide says done, the goal does not
                 heapq.heappush(pq, (g + 1 + weight * hn, hn, g + 1, next(tie), new, path + [(x, dst)]))
         return None
 
+    if exact is not None:                                    # never overestimates -> the first plan is shortest
+        found = run(1, EXACT_NODES, None, guide=exact)
+        if found is not None:
+            return {'moves': found, 'first': len(found), 'expanded': expanded[0], 'optimal': True,
+                    'seconds': round(time.perf_counter() - t0, 3), 'stopped': 'done', 'reason': None}
+        if stopped[0] == 'done':                              # searched everything: no plan exists
+            return {'moves': None, 'first': None, 'expanded': expanded[0], 'optimal': False, 'stopped': 'exhausted',
+                    'seconds': round(time.perf_counter() - t0, 3),
+                    'reason': 'no plan exists with these objects, places, limits and constraints (complete search)'}
+        stopped[0] = 'done'
     best = run(FIRST_WEIGHT, FIRST_NODES, None)
-    out = {'first': len(best) if best else None}
+    out = {'first': len(best) if best else None, 'optimal': False}
     if best:
         for w in IMPROVE_WEIGHTS:
             if stopped[0] == 'time':

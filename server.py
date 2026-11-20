@@ -104,6 +104,14 @@ class ReplanRequest(BaseModel):
                           'and quality (moves, optimal); the full answer is still logged for /replan')
 
 
+class CheckRequest(BaseModel):
+    scene: dict
+    goal: list
+    plan: list = Field(..., description='steps as "action arg ..." strings or {"action", "args"} dicts')
+    constraints: dict | None = None
+    ordered: bool = False
+
+
 class CameraPlanRequest(BaseModel):
     camera_id: str = 'cam0'
     instruction: str
@@ -372,6 +380,13 @@ def create_app(vlm, max_visual_tokens: int = 1024, log_dir: Path = LOG_DIR, memo
         res = openworld.run(scene=req.scene, goal=req.goal, planner=req.planner, memory=memory,
                             constraints=req.constraints, ordered=req.ordered)
         return finish(rid, d, req.model_dump(), res, len(json.dumps(req.scene)), req.compact)
+
+    @app.post('/check')
+    def check(req: CheckRequest):
+        """Replay a plan made elsewhere under this server's rules: which step would be rejected and why."""
+        rid, d = new_request()
+        res = openworld.check_plan(req.scene, req.goal, req.plan, req.constraints, req.ordered)
+        return finish(rid, d, req.model_dump(), res, len(json.dumps(req.scene)))
 
     @app.post('/replan')
     def replan(req: ReplanRequest):
