@@ -100,3 +100,24 @@ def to_actions(moves, final_support: dict[str, str] | None = None) -> list[tuple
         acts.append(("pick-from-table", [x]) if src == "table" else ("pick-from-item", [x, src]))
         acts.append(("place-on-table", [x]) if dst == "table" else ("place-on-item", [x, dst]))
     return acts
+
+
+def zone_unsettled(sup: dict, colour: dict, zone_of: dict) -> int:
+    """Goal "one tower per colour, standing in the zone of that colour": objects that must still move.
+
+    For each colour the best tower already in place is kept: an object of that colour directly in its
+    zone with a run of same-colour objects on it. Every other object must move at least once (it is in
+    the wrong place, on the wrong object, above such an object, or a second base). So this is a lower
+    bound on the moves, and it guides the search for this goal."""
+    above = {y: x for x, y in sup.items() if y in colour}
+    settled = 0
+    for c, z in zone_of.items():
+        best = 0
+        for x, s in sup.items():
+            if s == z and colour.get(x) == c:
+                k, cur = 1, x
+                while cur in above and colour.get(above[cur]) == c:
+                    cur, k = above[cur], k + 1
+                best = max(best, k)
+        settled += best
+    return len(sup) - settled

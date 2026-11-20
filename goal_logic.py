@@ -33,6 +33,21 @@ class FormulaError(ValueError):
     pass
 
 
+def stack_in_zones_formula(zone_of: dict) -> dict:
+    """One tower per colour standing in the zone of that colour: every object of colour c is directly
+    in zone c or on an object of colour c, and only one object of colour c stands directly in zone c.
+    (The chain under an object of colour c can then only end in zone c: one tower, base in the zone.)"""
+    parts = []
+    for c, z in sorted(zone_of.items()):
+        parts.append({'forall': {'x': 'object'}, 'where': {'color': ['x', c]}, 'body': {'or': [
+            {'in': ['x', z]},
+            {'exists': {'y': 'object'}, 'where': {'color': ['y', c]}, 'body': {'on': ['x', 'y']}}]}})
+        parts.append({'forall': {'x': 'object', 'y': 'object'},
+                      'where': {'and': [{'color': ['x', c]}, {'color': ['y', c]}, {'not': {'is': ['x', 'y']}}]},
+                      'body': {'not': {'and': [{'in': ['x', z]}, {'in': ['y', z]}]}}})
+    return {'and': parts}
+
+
 # "every stack one colour" as a formula: the general path for it when the exact search
 # (colour_stacks.py) is too slow, and an example of the language.
 STACK_BY_COLOUR = {"and": [

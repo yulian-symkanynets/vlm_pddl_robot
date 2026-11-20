@@ -139,6 +139,10 @@ def normalize_scene(raw: dict) -> dict:
         h = o.get('height_mm')
         if isinstance(h, (int, float)) and h > 0:
             d['height_mm'] = float(h)
+        size = next((o[k] for k in ('size_mm', 'width_mm', 'diameter_mm')
+                     if isinstance(o.get(k), (int, float)) and o[k] > 0), None)
+        if size is not None:
+            d['size_mm'] = float(size)              # footprint: a larger object may not go on a smaller one
         items[pid] = d
         names.add(pid, o.get('id'), label)
         sup = next((o[k] for k in ('on', 'on_top_of', 'rests_on', 'in') if isinstance(o.get(k), str)), None)
@@ -169,6 +173,11 @@ def normalize_scene(raw: dict) -> dict:
             d['color'] = c
         if isinstance(p.get('clearance_mm'), (int, float)):
             d['clearance_mm'] = float(p['clearance_mm'])
+        if isinstance(p.get('max_height_mm'), (int, float)) and p['max_height_mm'] > 0:
+            d['max_height_mm'] = float(p['max_height_mm'])      # a tower in this place may not be taller
+        mo = p.get('max_objects', p.get('max_top'))
+        if isinstance(mo, (int, float)) and mo >= 1:
+            d['max_objects'] = int(mo)                          # at most this many objects in one tower here
         places[pid] = d
         names.add(pid, p.get('id'), p.get('label'))
 
@@ -245,8 +254,19 @@ def normalize_scene(raw: dict) -> dict:
     missing_h = [x for x in items if 'height_mm' not in items[x]]
     if missing_h and any('clearance_mm' in d for d in places.values()):
         warnings.append('no height for ' + ', '.join(missing_h) + ': assumed to fit under every shelf')
+    rr = raw.get('rules') if isinstance(raw.get('rules'), dict) else {}
+    rules = {'no_larger_on_smaller': bool(rr.get('no_larger_on_smaller',
+                                              any('size_mm' in d for d in items.values())))}
+    if isinstance(rr.get('max_height_mm'), (int, float)) and rr['max_height_mm'] > 0:
+        rules['max_height_mm'] = float(rr['max_height_mm'])     # any tower, also on the table
+    if isinstance(rr.get('max_objects'), (int, float)) and rr['max_objects'] >= 1:
+        rules['max_objects'] = int(rr['max_objects'])
+    limited = [x for x in items if 'height_mm' not in items[x]]
+    if limited and (rules.get('max_height_mm') or any('max_height_mm' in d for d in places.values())):
+        warnings.append('height limits are set but these objects have no height_mm (counted as 0): '
+                        + ', '.join(limited[:8]))
     return {'items': items, 'env': {'places': places}, 'support': support, 'hidden': hidden,
-            'unknown': unknown, 'names': names, 'warnings': warnings}
+            'unknown': unknown, 'names': names, 'warnings': warnings, 'rules': rules}
 
 
 def scene_to_json(sc: dict) -> dict:
@@ -254,8 +274,9 @@ def scene_to_json(sc: dict) -> dict:
     return {
         'objects': [{'id': i, **d} for i, d in sc['items'].items()],
         'places': [{'id': p, 'kind': d['kind'], 'open': d['open'], 'capacity': d['slots'],
-                    **({'clearance_mm': d['clearance_mm']} if 'clearance_mm' in d else {})}
+                    **{k: d[k] for k in ('color', 'clearance_mm', 'max_height_mm', 'max_objects') if k in d}}
                    for p, d in sc['env']['places'].items()],
+        'rules': sc.get('rules', {}),
         'support': {**sc['support'], **{u: 'unknown' for u in sc['unknown']}},
         'hidden': sc['hidden'],
     }
@@ -321,8 +342,32 @@ def formula_goal(raw_goal, sc: dict):
     return [('formula', f if isinstance(f, str) else json.dumps(f, sort_keys=True))], None
 
 
+def zone_stack_goal(raw_goal, sc: dict):
+    """{"stack_in_zones": true} -> one tower per colour standing in the zone of that colour.
+    -> ([("zstack", <json {colour: zone}>)] or None if not asked, problem or None)"""
+    entries = [raw_goal] if isinstance(raw_goal, dict) else raw_goal if isinstance(raw_goal, list) else []
+    flag = [g for g in entries if (isinstance(g, dict) and g.get('stack_in_zones')) or g == 'stack_in_zones']
+    if not flag:
+        return None, None
+    if len(flag) != len(entries):
+        return None, 'stack_in_zones cannot be combined with other goal entries; send it alone'
+    zone_of = {}
+    for p, d in sc['env']['places'].items():
+        if d.get('color'):
+            zone_of.setdefault(d['color'], p)
+    missing = sorted({d.get('color') or x for x, d in sc['items'].items() if d.get('color') not in zone_of})
+    if missing:
+        return None, ('stack in zones: no zone for ' + ', '.join(missing) +
+                      ' (every object needs a colour and a zone of that colour)')
+    used = {d['color'] for d in sc['items'].values()}
+    return [('zstack', json.dumps({c: z for c, z in zone_of.items() if c in used}, sort_keys=True))], None
+
+
 def resolve_goal(raw_goal, sc: dict) -> tuple[list[tuple[str, ...]] | None, str | None]:
     """Normalize + ground the goal on the scene ids. Returns (goal, problem_for_the_user)."""
+    zoned, problem = zone_stack_goal(raw_goal, sc)
+    if problem or zoned:
+        return zoned, problem
     stacked, problem = stack_goal(raw_goal, sc)
     if problem or stacked:
         return stacked, problem
@@ -479,6 +524,7 @@ One entry per requirement:
   {{"object": "<id>", "on": "table"}}
   {{"sort_by_color": true}}                     every object goes into the place of its own colour
   {{"stack_by_color": true}}                    one stack per colour on the table, any order (write it alone)
+  {{"stack_in_zones": true}}                    one tower per colour standing in the zone of that colour (write it alone)
   {{"formula": F}}                              any other goal, as a logic formula (write it alone), see below
 For "make every stack one colour" (or "stack the objects by colour") write only {{"stack_by_color": true}}.
 For "sort by colour" (or "put everything where its colour belongs") write the one entry
@@ -495,6 +541,8 @@ F is built from (every node has one key, except forall/exists):
          {{"color": ["x", "red"]}}, {{"shape": ["x", "cube"]}}, {{"same_color": ["x", "y"]}}, {{"same_shape": ["x", "y"]}}, {{"is": ["x", "y"]}}
 Names are ids from the lists above or variables you declare. Example, "put every cube into the red zone":
 {{"formula": {{"forall": {{"x": "object"}}, "where": {{"shape": ["x", "cube"]}}, "body": {{"in": ["x", "red_zone"]}}}}}}
+If the instruction gives an ORDER ("first ..., then ...", "after that"), list the entries in that order
+and add "ordered": true next to "goal".
 If the instruction also limits HOW it may be done, add "constraints" (only what the instruction says),
 and for every constraint copy the EXACT words of the instruction that say it into "evidence":
   "no_table": true                       nothing may be put down on the table
@@ -507,7 +555,7 @@ return {{"goal": [], "question": "<short question for the user>"}}.
 Most instructions have no constraints: then leave "constraints" empty.
 
 Return only JSON:
-{{"goal": [ ... ], "constraints": {{ ... }}, "evidence": {{"<constraint>": "<exact words from the instruction>"}}}}"""
+{{"goal": [ ... ], "ordered": false, "constraints": {{ ... }}, "evidence": {{"<constraint>": "<exact words from the instruction>"}}}}"""
 
 
 def _json_answer(text: str):
@@ -525,17 +573,45 @@ OPTIMAL_TIMEOUT_S = 5.0          # optimal search, only when the fast plan is no
 SATISFICING_TIMEOUT_S = 20.0     # fast planner; certain impossibilities are caught before planning
 
 
-def plan_for(sc: dict, goal, planner: str = 'auto', constraints: dict | None = None, memory=None) -> dict:
+FIXED = ('on', 'in', 'on-table')
+
+
+def needs_generic(sc: dict, cons: dict) -> bool:
+    """Limits the PDDL domain cannot express (tower height and size rules): use the general search."""
+    r = sc.get('rules') or {}
+    return bool(cons.get('max_stack_height') or r.get('max_height_mm') or r.get('max_objects')
+                or (r.get('no_larger_on_smaller') and any('size_mm' in d for d in sc['items'].values()))
+                or any('max_height_mm' in d or 'max_objects' in d for d in sc['env']['places'].values()))
+
+
+def fixed_to_formula(goal) -> dict:
+    return {'and': [{'on_table': [g[1]]} if g[0] == 'on-table' else {g[0]: [g[1], g[2]]} for g in goal]}
+
+
+def plan_for(sc: dict, goal, planner: str = 'auto', constraints: dict | None = None, memory=None,
+             ordered: bool = False) -> dict:
     """Scene + grounded goal (+ the task's constraints) -> PDDL domain and problem for THIS
     request -> plan -> verified on the same problem."""
     import pddl_task
     cons = constraints or {}
+    if ordered and goal and len(goal) > 1 and all(g[0] in FIXED for g in goal):
+        return plan_ordered(sc, goal, planner, cons)
     impossible = certain_no_plan(sc, goal)
     if impossible:
         return {'status': 'no_plan', 'message': '; '.join(impossible), 'plan': None,
                 'planner': 'precheck', 'planner_status': 'unsolvable', 'plan_s': 0.0}
     if goal and goal[0][0] == 'formula':
         return plan_formula(sc, goal[0][1], cons)
+    if goal and goal[0][0] == 'zstack':
+        return plan_zone_stacks(sc, goal[0][1], cons)
+    if goal and needs_generic(sc, cons):
+        import goal_logic
+        import plan_quality
+        lb = plan_quality.lower_bound(sc['support'], sc['items'], goal)       # still valid under limits
+        if all(g[0] == 'col-ok' for g in goal):
+            return plan_formula(sc, json.dumps(goal_logic.STACK_BY_COLOUR, sort_keys=True), cons, lower_bound=lb)
+        if all(g[0] in FIXED for g in goal):
+            return plan_formula(sc, json.dumps(fixed_to_formula(goal), sort_keys=True), cons, lower_bound=lb)
     stack = bool(goal) and all(g[0] == 'col-ok' for g in goal)      # one stack per colour
     ptext = make_problem('openworld', sc['env'], sc['items'], sc['support'], goal, sc['hidden'])
     domain_pddl, domain_path = None, None
@@ -609,22 +685,9 @@ def plan_for(sc: dict, goal, planner: str = 'auto', constraints: dict | None = N
             'plan': robot_plan(acts)}
 
 
-def plan_formula(sc: dict, formula_json: str, cons: dict) -> dict:
-    """General goal: search for moves (formula_plan.py), then check the plan twice: the domain's
-    simulator confirms every action is allowed, and the formula is evaluated on the final state."""
-    import formula_plan
-    import goal_logic
+def verify_acts(sc: dict, acts, cons: dict):
+    """Run actions on this scene's PDDL problem (with the task's constraints). -> (simulation, problem)."""
     import pddl_task
-    goal = goal_logic.compile_goal(formula_json, sc)
-    base = {'planner': 'goal-search', 'plan_s': 0.0}
-    if sc['hidden']:
-        return {**base, 'status': 'no_plan', 'plan': None, 'planner_status': 'unsupported',
-                'message': 'a goal formula needs every object visible; hidden: ' + ', '.join(sc['hidden'])}
-    found = formula_plan.find_moves(sc, goal, cons)
-    base.update(plan_s=found['seconds'], planner_status='solved_satisficing' if found['moves'] is not None else 'unsolved')
-    if found['moves'] is None:
-        return {**base, 'status': 'no_plan', 'message': found['reason'], 'plan': None}
-    acts = formula_plan.to_actions(found['moves'], sc)
     ptext = make_problem('openworld', sc['env'], sc['items'], sc['support'], [('hand-empty',)], sc['hidden'])
     domain_path = None
     if pddl_task.needs_custom_domain(cons, sc):
@@ -635,23 +698,173 @@ def plan_formula(sc: dict, formula_json: str, cons: dict) -> dict:
     finally:
         if domain_path:
             domain_path.unlink(missing_ok=True)
+    return sim, ptext
+
+
+def plan_formula(sc: dict, formula_json: str, cons: dict, heuristic=None, lower_bound: int | None = None,
+                 label: str = 'goal-search') -> dict:
+    """General goal: search for moves (formula_plan.py), then check the plan three times: the domain's
+    simulator (every action allowed under the constraints), the scene's limits (sizes, tower height),
+    and the formula on the final arrangement. `lower_bound` (moves no plan can avoid) gives a proof
+    of shortest when the plan reaches it."""
+    import formula_plan
+    import goal_logic
+    goal = goal_logic.compile_goal(formula_json, sc)
+    base = {'planner': label, 'plan_s': 0.0}
+    if sc['hidden']:
+        return {**base, 'status': 'no_plan', 'plan': None, 'planner_status': 'unsupported',
+                'message': 'this goal needs every object visible; hidden: ' + ', '.join(sc['hidden'])}
+    found = formula_plan.find_moves(sc, goal, cons, heuristic=heuristic)
+    base.update(plan_s=found['seconds'], planner_status='solved_satisficing' if found['moves'] is not None else 'unsolved')
+    if found['moves'] is None:
+        return {**base, 'status': 'no_plan', 'message': found['reason'], 'plan': None}
+    acts = formula_plan.to_actions(found['moves'], sc)
+    if cons.get('first') and acts:                           # the domain marks the first pick
+        acts[0] = (acts[0][0].replace('pick-', 'pick-first-', 1), acts[0][1])
+    sim, ptext = verify_acts(sc, acts, cons)
+    broken = formula_plan.check_moves(sc, found['moves'], cons)
     final = dict(sc['support'])
     for x, dst in found['moves']:
         final[x] = dst
     holds = goal.holds(goal_logic.View(final, sc['items']))
-    ok = sim['ok'] and holds
+    ok = sim['ok'] and holds and broken is None
     n = len(found['moves'])
     picked = [x for x, _ in found['moves']]
-    quality = {'moves': n, 'lower_bound': None, 'optimal': n == 0,
-               'proof': 'the goal already holds' if n == 0 else None, 'max_extra_moves': None,
+    proven = n == 0 or (lower_bound is not None and n == lower_bound)
+    quality = {'moves': n, 'lower_bound': lower_bound, 'optimal': proven,
+               'proof': 'the goal already holds' if n == 0 else
+               'the plan moves only objects that must move, each once' if proven else None,
+               'max_extra_moves': n - lower_bound if lower_bound is not None else None,
                'moved_more_than_once': sorted({x for x in picked if picked.count(x) > 1}),
-               'note': None if n == 0 else
-               f'general goal: the plan is verified, not proven shortest (first plan {found["first"]} moves, '
-               f'best found {n}, search {found["seconds"]} s)'}
+               'note': None if proven else
+               f'verified, not proven shortest (first plan {found["first"]} moves, best found {n}, '
+               f'search {found["seconds"]} s)'}
     return {**base, 'problem_pddl': ptext, 'quality': quality, 'verified': ok,
             'status': 'ok' if ok else 'error',
-            'message': None if ok else ('plan failed verification: ' + (sim['fail_reason'] or 'goal formula not reached')),
+            'message': None if ok else ('plan failed verification: ' +
+                                        (sim['fail_reason'] or broken or 'goal not reached')),
             'plan': robot_plan(acts)}
+
+
+def zone_towers_impossible(sc: dict, zone_of: dict, cons: dict) -> list[str]:
+    """Reasons the colour towers cannot fit their zones at all, found without search: the whole colour
+    must stand in one tower, so its height and its number of objects must fit the limits."""
+    rules, out = sc.get('rules') or {}, []
+    for c, z in zone_of.items():
+        objs = [x for x, d in sc['items'].items() if d.get('color') == c]
+        d = sc['env']['places'][z]
+        height = sum(sc['items'][x].get('height_mm', 0.0) for x in objs)
+        for lim, what in ((d.get('max_height_mm'), f'{z} allows {d.get("max_height_mm"):g} mm'
+                           if d.get('max_height_mm') else ''),
+                          (rules.get('max_height_mm'), f'towers may be {rules.get("max_height_mm"):g} mm'
+                           if rules.get('max_height_mm') else '')):
+            if lim and height > lim + 1e-6:
+                out.append(f'the {len(objs)} {c} objects make a {height:g} mm tower, {what}')
+        for lim in (d.get('max_objects'), rules.get('max_objects'), cons.get('max_stack_height')):
+            if lim and len(objs) > lim:
+                out.append(f'{len(objs)} {c} objects must stand in one tower in {z}, at most {lim} allowed')
+    if cons.get('keep'):
+        for x in cons['keep']:
+            c = sc['items'].get(x, {}).get('color')
+            if c in zone_of and sc['support'].get(x) not in sc['items'] and sc['support'].get(x) != zone_of[c]:
+                out.append(f'{x} must stay where it is, but it has to go into {zone_of[c]}')
+    return out
+
+
+def plan_zone_stacks(sc: dict, zone_json: str, cons: dict) -> dict:
+    """One tower per colour standing in the zone of that colour (works with no_table and limits)."""
+    import colour_stacks
+    import goal_logic
+    zone_of = json.loads(zone_json)
+    colour = {x: d.get('color') for x, d in sc['items'].items()}
+    impossible = zone_towers_impossible(sc, zone_of, cons)
+    if impossible:
+        return {'status': 'no_plan', 'message': '; '.join(impossible), 'plan': None, 'planner': 'precheck',
+                'planner_status': 'unsolvable', 'plan_s': 0.0}
+    guide = lambda sup: colour_stacks.zone_unsettled(sup, colour, zone_of)       # noqa: E731
+    return plan_formula(sc, json.dumps(goal_logic.stack_in_zones_formula(zone_of), sort_keys=True), cons,
+                        heuristic=guide, lower_bound=guide(sc['support']), label='zone-towers')
+
+
+def _fact_holds(f, sup: dict) -> bool:
+    return sup.get(f[1]) == ('table' if f[0] == 'on-table' else f[2])
+
+
+def _fact_words(f) -> str:
+    return f'{f[1]} on the table' if f[0] == 'on-table' else f'{f[1]} {f[0]} {f[2]}'
+
+
+def _apply_steps(sup: dict, steps) -> dict:
+    sup = dict(sup)
+    for st in steps:
+        a, args = st['action'], st['args']
+        if a == 'place-on-table':
+            sup[args[0]] = 'table'
+        elif a == 'place-on-item':
+            sup[args[0]] = args[1]
+        elif a == 'place-in':
+            sup[args[0]] = args[-1]
+    return sup
+
+
+def order_check(start: dict, steps, goal) -> dict:
+    """When did each goal become true for good (move number, 0 = true from the start)? In order if
+    those moments do not decrease along the goal list."""
+    sup, move, became = dict(start), 0, []
+    state = [_fact_holds(f, sup) for f in goal]
+    became = [0 if v else None for v in state]
+    for st in steps:
+        if not st['action'].startswith('place'):
+            continue
+        move += 1
+        sup = _apply_steps(sup, [st])
+        for i, f in enumerate(goal):
+            now = _fact_holds(f, sup)
+            if now and not state[i]:
+                became[i] = move
+            if not now:
+                became[i] = None
+            state[i] = now
+    seq = [b for b in became if b is not None]
+    return {'achieved_at_move': became, 'in_order': None not in became and seq == sorted(seq)}
+
+
+def plan_ordered(sc: dict, goal, planner: str, cons: dict) -> dict:
+    """Goals in the given order ("first A, then B, then C"): plan stage by stage. Stage k reaches goals
+    1..k while the objects of goals 1..k-1 stay where they are, so an earlier goal is never undone."""
+    import plan_quality
+    t0 = time.perf_counter()
+    cur, steps, keep, hidden = dict(sc['support']), [], set(cons.get('keep') or []), list(sc['hidden'])
+    for k, g in enumerate(goal, 1):
+        sub = goal[:k]
+        if not all(_fact_holds(f, cur) for f in sub):
+            c2 = {kk: v for kk, v in cons.items() if kk != 'keep' and not (kk == 'first' and steps)}
+            if keep:
+                c2['keep'] = sorted(keep)
+            p = plan_for({**sc, 'support': dict(cur), 'hidden': hidden}, sub, planner, c2)
+            if p['status'] != 'ok':
+                why = p.get('message') or 'no plan'
+                return {**p, 'plan': None, 'message': why if k == 1 else
+                        f'goal {k} ({_fact_words(g)}) cannot be reached without undoing goals 1-{k - 1}: {why}'}
+            steps += p['plan']
+            cur = _apply_steps(cur, p['plan'])
+            hidden = [h for h in hidden if not any(s['action'] == 'observe' and s['args'][0] == h for s in p['plan'])]
+        keep.add(g[1])
+    acts = [(st['action'], st['args']) for st in steps]
+    sim, ptext = verify_acts(sc, acts, {kk: v for kk, v in cons.items() if kk != 'first'})
+    order = order_check(sc['support'], steps, goal)
+    first = cons.get('first')
+    first_ok = not first or not steps or plan_quality.moves_of(steps)[:1] == [first]
+    ok = sim['ok'] and order['in_order'] and first_ok and all(_fact_holds(f, cur) for f in goal)
+    quality = plan_quality.assess(sc, goal, steps, 'ordered', '')
+    if quality['proof']:
+        quality['proof'] += ' (and in the requested order)'
+    else:
+        quality['note'] = 'goals planned one after another in the requested order; verified, not proven shortest'
+    return {'status': 'ok' if ok else 'error', 'planner': 'ordered', 'planner_status': 'solved_satisficing',
+            'plan_s': round(time.perf_counter() - t0, 3), 'problem_pddl': ptext, 'quality': quality,
+            'verified': ok, 'order': order, 'plan': steps,
+            'message': None if ok else 'plan failed verification: ' + (sim['fail_reason'] or 'goals not met in order')}
 
 
 def colour_stack_plan(sc: dict):
@@ -703,8 +916,10 @@ def robot_plan(acts) -> list[dict]:
 # --------------------------------------------------------------------------- end to end
 def run(instruction: str | None = None, scene: dict | None = None, images=None, vlm=None,
         goal=None, planner: str = 'auto', max_visual_tokens: int = 1024, sample: bool = False,
-        constraints: dict | None = None, memory=None, places: list | None = None) -> dict:
-    """The server's job. Give `scene` (semantic path) or `images` (+ vlm). `goal` skips the goal call."""
+        constraints: dict | None = None, memory=None, places: list | None = None,
+        ordered: bool | None = None) -> dict:
+    """The server's job. Give `scene` (semantic path) or `images` (+ vlm). `goal` skips the goal call.
+    `ordered`: the goal list is a sequence (first A, then B ...); None = as the model read it."""
     t0 = time.perf_counter()
     res = {'status': 'error', 'message': None, 'instruction': instruction, 'timings': {}, 'model_answers': {}}
     pending = []                                  # experience_db entries, stored only if the request ends ok
@@ -797,11 +1012,16 @@ def run(instruction: str | None = None, scene: dict | None = None, images=None, 
             if dropped:
                 res.setdefault('warnings', []).append(
                     'ignored constraints the instruction does not state: ' + ', '.join(dropped))
+        if ordered is None and isinstance(js, dict) and js.get('ordered') is True:
+            ordered = True                       # the model read "first ..., then ..." in the sentence
         goal = js.get('goal') if isinstance(js, dict) else js
     grounded, problem = resolve_goal(goal, sc)
     if problem:
         return done('clarify', problem, goal_raw=goal)
-    if grounded and grounded[0][0] == 'formula':
+    res['ordered'] = bool(ordered)
+    if grounded and grounded[0][0] == 'zstack':
+        res['goal'] = [{'stack_in_zones': True}]
+    elif grounded and grounded[0][0] == 'formula':
         import goal_logic
         formula = json.loads(grounded[0][1])
         res['goal'] = [{'formula': formula, 'in_words': goal_logic.describe(formula)}]
@@ -814,14 +1034,11 @@ def run(instruction: str | None = None, scene: dict | None = None, images=None, 
     cons, problems = pddl_task.normalize_constraints(constraints, sc)
     if problems:
         return done('clarify', '; '.join(problems), goal_raw=goal)
-    if cons.get('max_stack_height'):
-        res['warnings'] = res.get('warnings', []) + ['max_stack_height cannot be expressed in the PDDL path '
-                                                     '(use the task server); it was ignored']
-    res['constraints'] = {k: v for k, v in cons.items() if k != 'max_stack_height'}
+    res['constraints'] = dict(cons)             # max_stack_height is handled by the general search
 
     # 3) PDDL + planner + verification
     try:
-        p = plan_for(sc, grounded, planner, cons, memory=memory)
+        p = plan_for(sc, grounded, planner, cons, memory=memory, ordered=bool(ordered))
     except Exception as e:                       # noqa: BLE001  (report, do not crash the server)
         return done('error', f'planning: {type(e).__name__}: {e}')
     res['timings']['plan_s'] = p.pop('plan_s')
@@ -859,7 +1076,55 @@ def _after_actions(support: dict, plan: list[dict]) -> list[dict]:
     return states
 
 
-def replan(previous: dict, new_scene: dict, planner: str = 'auto', memory=None) -> dict:
+def _parse_step(f, plan: list) -> tuple[str | None, list]:
+    """A reported step: "(pick-from-item a b)", {"action", "args"}, {"pddl": ...} or {"step": k} (1-based)."""
+    if isinstance(f, dict) and isinstance(f.get('step'), int) and 1 <= f['step'] <= len(plan):
+        f = plan[f['step'] - 1]
+    if isinstance(f, dict) and isinstance(f.get('pddl'), str) and not f.get('action'):
+        f = f['pddl']
+    if isinstance(f, str):
+        t = f.strip().strip('()').split()
+        return (t[0], t[1:]) if t else (None, [])
+    if isinstance(f, dict) and f.get('action'):
+        return str(f['action']), [str(a) for a in f.get('args') or []]
+    return None, []
+
+
+def failed_constraints(failed: list, plan: list, cons: dict) -> tuple[dict, list[str]]:
+    """Steps the robot could not do become constraints, so they are never proposed again:
+    a failed pick -> the object stays where it is (keep); a failed place -> never put it there."""
+    keep = list(cons.get('keep') or [])
+    never = [list(t) for t in cons.get('never_on') or []]
+    notes = []
+    for f in failed or []:
+        a, args = _parse_step(f, plan)
+        if not a or not args:
+            notes.append(f'could not read the failed step {f!r}')
+            continue
+        x = args[0]
+        a = a.replace('pick-first-', 'pick-')
+        if a.startswith('pick'):
+            if x not in keep:
+                keep.append(x)
+            notes.append(f'{x} will not be picked again (the pick failed)')
+            continue
+        target = {'place-on-table': 'table', 'place-on-item': args[1] if len(args) > 1 else None,
+                  'place-in': args[-1]}.get(a)
+        if target is None:
+            notes.append(f'cannot use the failed step {a} {" ".join(args)}')
+            continue
+        if [x, target] not in never:
+            never.append([x, target])
+        notes.append(f'{x} will not be put on {target} again (that placement failed)')
+    out = dict(cons)
+    if keep:
+        out['keep'] = keep
+    if never:
+        out['never_on'] = never
+    return out, notes
+
+
+def replan(previous: dict, new_scene: dict, planner: str = 'auto', memory=None, failed: list | None = None) -> dict:
     """The scene changed after a plan was made (robot progress, a person moved something, an
     object appeared or vanished). Reuses the goal and constraints already understood, so the
     VLM is not called again.
@@ -890,7 +1155,10 @@ def replan(previous: dict, new_scene: dict, planner: str = 'auto', memory=None) 
     if cons.get('first') and old_support.get(cons['first']) != new_support.get(cons['first']):
         cons.pop('first')                        # "move X first" is done once X has moved
     old_plan = previous.get('plan') or []
-    if set(old_support) == set(new_support) and not sc['unknown']:
+    notes = []
+    if failed:                                    # never propose a step the robot could not do
+        cons, notes = failed_constraints(failed, old_plan, cons)
+    if not failed and set(old_support) == set(new_support) and not sc['unknown']:
         for k, state in _after_actions(old_support, old_plan):
             if state == new_support:
                 rest = old_plan[k:]
@@ -905,9 +1173,14 @@ def replan(previous: dict, new_scene: dict, planner: str = 'auto', memory=None) 
                         'changes': changes, 'goal': goal, 'constraints': cons,
                         'scene': scene_to_json(sc), 'plan': rest, 'done_actions': k,
                         'timings': {'total_s': round(time.perf_counter() - t0, 3)}}
-    res = run(scene=new_scene, goal=goal, constraints=cons, planner=planner, memory=memory)
+    res = run(scene=new_scene, goal=goal, constraints=cons, planner=planner, memory=memory,
+              ordered=bool(previous.get('ordered')))
     res['decision'] = 'replanned'
     res['changes'] = changes
+    if notes:
+        res['failed_rules'] = notes
+        if res['status'] != 'ok':
+            res['message'] = f"{res.get('message')} (excluded after failures: {'; '.join(notes)})"
     return res
 
 
@@ -985,6 +1258,11 @@ class RuleMock:
 
     def _goal(self, instruction: str, sc: dict) -> dict:
         low = instruction.lower()
+        if re.search(r'\b(stacks?|towers?)\b', low) and re.search(r'\bzones?\b', low):
+            return {'goal': [{'stack_in_zones': True}]}
+        if re.search(r'\bfirst\b.*\bthen\b', low):          # an order, not the "first" constraint
+            out = self._goal(re.sub(r'\bfirst\b\s*', '', instruction, count=1, flags=re.I), sc)
+            return {**out, 'ordered': True} if out.get('goal') else out
         if re.search(r'\bstacks?\b', low) and re.search(r'colou?r', low):
             return {'goal': [{'stack_by_color': True}]}
         if re.search(r'\bsort\b|\bby colou?r\b', low):

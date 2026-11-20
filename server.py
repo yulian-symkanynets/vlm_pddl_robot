@@ -87,12 +87,20 @@ class PlanRequest(BaseModel):
     crop: list[float] | None = Field(None, description='[x0, y0, x1, y1] fractions 0..1: the work area')
     places: list | None = Field(None, description='fixed places of the lab (zones, boxes) to add to what the camera '
                                               'sees, e.g. [{"id": "red_zone", "color": "red", "capacity": 4}]')
+    ordered: bool | None = Field(None, description='the goal list is a sequence (first A, then B ...): goals are met '
+                                 'in this order and an earlier goal is never undone. Default: as the model read it')
+    compact: bool = Field(False, description='answer with only request_id, status, plan ("action arg ..." strings) '
+                          'and quality (moves, optimal); the full answer is still logged for /replan')
 
 
 class ReplanRequest(BaseModel):
     request_id: str = Field(..., description='request_id of the /plan (or previous /replan) answer')
     scene: dict = Field(..., description='the scene as it is NOW')
     planner: str = 'auto'
+    failed: list | None = Field(None, description='steps the robot could not do, e.g. ["(pick-from-item a b)"], '
+                                '[{"action": ..., "args": [...]}] or [{"step": 3}]; they are never proposed again')
+    compact: bool = Field(False, description='answer with only request_id, status, plan ("action arg ..." strings) '
+                          'and quality (moves, optimal); the full answer is still logged for /replan')
 
 
 class CameraPlanRequest(BaseModel):
@@ -120,6 +128,28 @@ class SolveRequest(BaseModel):
     scene: dict
     goal: list = Field(..., examples=[[{'object': 'yellow_block', 'in': 'box_1'}]])
     planner: str = 'auto'
+    constraints: dict | None = Field(None, description='no_table, keep, never_on, first, max_stack_height')
+    ordered: bool | None = Field(None, description='the goal list is a sequence (first A, then B ...): goals are met '
+                                 'in this order and an earlier goal is never undone. Default: as the model read it')
+    compact: bool = Field(False, description='answer with only request_id, status, plan ("action arg ..." strings) '
+                          'and quality (moves, optimal); the full answer is still logged for /replan')
+
+
+def compact_answer(res: dict) -> dict:
+    """Only what the robot needs: plan steps as "action arg ..." strings and the quality verdict.
+    Questions and refusals keep their message; replans keep their decision."""
+    out = {'request_id': res.get('request_id'), 'status': res.get('status')}
+    if res.get('status') != 'ok' and res.get('message'):
+        out['message'] = res['message']
+    for k in ('need', 'decision'):
+        if res.get(k):
+            out[k] = res[k]
+    if res.get('plan') is not None:
+        out['plan'] = [' '.join([st['action'], *st['args']]) for st in res['plan']]
+    q = res.get('quality') or {}
+    if q:
+        out['quality'] = {'moves': q.get('moves'), 'optimal': q.get('optimal')}
+    return out
 
 
 def create_app(vlm, max_visual_tokens: int = 1024, log_dir: Path = LOG_DIR, memory=None) -> FastAPI:
@@ -171,12 +201,12 @@ def create_app(vlm, max_visual_tokens: int = 1024, log_dir: Path = LOG_DIR, memo
             paths.append(p)
         return paths
 
-    def finish(rid: str, d: Path, request: dict, result: dict, received_bytes: int) -> dict:
+    def finish(rid: str, d: Path, request: dict, result: dict, received_bytes: int, compact: bool = False) -> dict:
         result = {'request_id': rid, **result, 'received_bytes': received_bytes,
                   'model': getattr(vlm, 'key', None)}
         (d / 'request.json').write_text(json.dumps(request, indent=2))
-        (d / 'response.json').write_text(json.dumps(result, indent=2))
-        return result
+        (d / 'response.json').write_text(json.dumps(result, indent=2))       # always the full answer
+        return compact_answer(result) if compact else result
 
     @app.get('/', include_in_schema=False)
     def index():
@@ -226,14 +256,16 @@ def create_app(vlm, max_visual_tokens: int = 1024, log_dir: Path = LOG_DIR, memo
         received = len(json.dumps(req.scene)) if req.scene else sum(len(x) for _, x in blobs)
         res = plan_images(images, req.resolution, req.crop, attempts=req.attempts,
                           instruction=req.instruction, scene=req.scene, goal=req.goal,
-                          planner=req.planner, constraints=req.constraints, places=req.places)
-        return finish(rid, d, {**body, 'images': [p.name for p in images]}, res, received)
+                          planner=req.planner, constraints=req.constraints, places=req.places,
+                          ordered=req.ordered)
+        return finish(rid, d, {**body, 'images': [p.name for p in images]}, res, received, req.compact)
 
     @app.post('/plan/upload')
     async def plan_upload(instruction: str = Form(...), files: list[UploadFile] = File(default=[]),
                           scene: str | None = Form(None), planner: str = Form('auto'),
                           attempts: int = Form(3), resolution: str | None = Form(None),
-                          crop: str | None = Form(None, description='JSON list [x0, y0, x1, y1]')):
+                          crop: str | None = Form(None, description='JSON list [x0, y0, x1, y1]'),
+                          compact: bool = Form(False)):
         req = {'instruction': instruction, 'planner': planner, 'resolution': resolution, 'crop': crop}
         try:
             crop_box = json.loads(crop) if crop else None
@@ -252,7 +284,7 @@ def create_app(vlm, max_visual_tokens: int = 1024, log_dir: Path = LOG_DIR, memo
         images = save_images(d, blobs)
         res = plan_images(images, resolution, crop_box, attempts=min(max(attempts, 1), 5),
                           instruction=instruction, scene=req.get('scene'), planner=planner)
-        return finish(rid, d, {**req, 'images': [p.name for p in images]}, res, received)
+        return finish(rid, d, {**req, 'images': [p.name for p in images]}, res, received, compact)
 
     @app.post('/perceive')
     async def perceive(files: list[UploadFile] = File(...), resolution: str | None = Form(None),
@@ -277,8 +309,9 @@ def create_app(vlm, max_visual_tokens: int = 1024, log_dir: Path = LOG_DIR, memo
     @app.post('/solve')
     def solve(req: SolveRequest):
         rid, d = new_request()
-        res = openworld.run(scene=req.scene, goal=req.goal, planner=req.planner, memory=memory)
-        return finish(rid, d, req.model_dump(), res, len(json.dumps(req.scene)))
+        res = openworld.run(scene=req.scene, goal=req.goal, planner=req.planner, memory=memory,
+                            constraints=req.constraints, ordered=req.ordered)
+        return finish(rid, d, req.model_dump(), res, len(json.dumps(req.scene)), req.compact)
 
     @app.post('/replan')
     def replan(req: ReplanRequest):
@@ -288,9 +321,10 @@ def create_app(vlm, max_visual_tokens: int = 1024, log_dir: Path = LOG_DIR, memo
         if not prev.exists():
             raise HTTPException(404, 'unknown request_id')
         rid, d = new_request()
-        res = openworld.replan(json.loads(prev.read_text()), req.scene, req.planner, memory=memory)
+        res = openworld.replan(json.loads(prev.read_text()), req.scene, req.planner, memory=memory,
+                               failed=req.failed)
         res['replans'] = req.request_id
-        return finish(rid, d, req.model_dump(), res, len(json.dumps(req.scene)))
+        return finish(rid, d, req.model_dump(), res, len(json.dumps(req.scene)), req.compact)
 
     # ------------------------------------------------------------ camera stream
     frames: dict[str, dict] = {}          # camera id -> latest frame, time, count, rate

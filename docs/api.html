@@ -178,7 +178,8 @@ else:
     <tr><td><code>color</code></td><td>recommended</td><td><code>red</code>, <code>yellow</code>, <code>blue</code>, <code>green</code>, … Used to understand "the red ones".</td></tr>
     <tr><td><code>shape</code></td><td>recommended</td><td><code>cube</code>, <code>block</code>, <code>bar</code>, <code>cylinder</code>, <code>prism</code>, … Nothing can be put on a prism.</td></tr>
     <tr><td><code>label</code></td><td>no</td><td>Free description shown to the model. Default: color + shape.</td></tr>
-    <tr><td><code>height_mm</code></td><td>no</td><td>Only needed for shelves with a height limit.</td></tr>
+    <tr><td><code>height_mm</code></td><td>no</td><td>Needed for height limits (shelves, <code>max_height_mm</code>).</td></tr>
+    <tr><td><code>size_mm</code></td><td>no</td><td>Footprint (also <code>width_mm</code>, <code>diameter_mm</code>). When given, a larger object is never put on a smaller one.</td></tr>
   </table></div>
   <h3>Places (<code>zones</code> or <code>places</code>)</h3>
   <div class="tablewrap"><table>
@@ -187,7 +188,10 @@ else:
     <tr><td><code>color</code></td><td>Colour of the paper, used for "sort by colour".</td></tr>
     <tr><td><code>capacity</code></td><td>How many objects fit directly on it. Objects stacked on top of each other inside a zone do not count as "in the zone".</td></tr>
     <tr><td><code>kind</code></td><td><code>zone</code> (default), <code>box</code>, <code>tray</code>, <code>bin</code>, <code>shelf</code>. A box may have <code>"open": false</code>.</td></tr>
+    <tr><td><code>max_height_mm</code></td><td>A tower standing in this place may not be taller (sum of <code>height_mm</code>).</td></tr>
+    <tr><td><code>max_top</code> / <code>max_objects</code></td><td>At most this many objects in one tower in this place.</td></tr>
   </table></div>
+  <p>Optional <code>"rules"</code> for the whole scene: <code>{"max_height_mm": 250, "max_objects": 4, "no_larger_on_smaller": true}</code>. They apply to every tower, also on the table, and while the plan runs, not only at the end. With limits, plans come from the general search; impossible limits are explained at once.</p>
   <h3>Several objects of one colour</h3>
   <p>Allowed and common: four red objects with different shapes are four objects. Give each its own id (<code>red_block_1</code>, <code>red_block_2</code>, <code>red_bar_1</code>, …). If two objects arrive with the same id, the server renames the second (<code>red_block_2</code>) and decides "on red_block" by physics: at most one object on another, no loops. When both readings are possible it does not guess and answers <span class="pill warn">need_observation</span>.</p>
   <h3>Example: the four towers of 20 November</h3>
@@ -245,6 +249,7 @@ else:
     <tr><td><code>{"object": "a", "on": "b"}</code></td><td>a ends directly on b (a tower is several entries)</td></tr>
     <tr><td><code>{"object": "a", "on": "table"}</code></td><td>a ends on the open table</td></tr>
     <tr><td><code>{"sort_by_color": true}</code></td><td>every object into the zone of its own colour; the server expands it, and an explicit entry for one object overrides it</td></tr>
+    <tr><td><code>{"stack_in_zones": true}</code></td><td>one tower per colour, standing in the zone of that colour; works with <code>no_table</code> and limits. Four towers of 16 objects without the table: 16 moves, proven shortest, about 1.8 s</td></tr>
     <tr><td><code>{"stack_by_color": true}</code></td><td>one stack per colour on the table; the planner chooses which object is the base and the order, for the fewest moves (four towers: 15 moves, proven shortest, about 1 s). Send it alone, without constraints</td></tr>
   </table></div>
   <div class="tablewrap"><table>
@@ -298,6 +303,8 @@ else:
       <tr><td><code>crop</code></td><td>[x0, y0, x1, y1]</td><td>–</td><td>keep only the work area, fractions 0–1</td></tr>
       <tr><td><code>attempts</code></td><td>1–5</td><td>3</td><td>retries when the model writes something unreadable</td></tr>
       <tr><td><code>planner</code></td><td>string</td><td>auto</td><td><code>auto</code>, <code>fast-downward</code>, <code>fast-downward-opt</code>, <code>pyperplan</code></td></tr>
+      <tr><td><code>ordered</code></td><td>bool</td><td>as read</td><td>the goal list is a sequence: goals are met in this order and an earlier goal is never undone (answer: <code>order.achieved_at_move</code>). The model sets it for "first ..., then ..."</td></tr>
+      <tr><td><code>compact</code></td><td>bool</td><td>false</td><td>answer only <code>request_id</code>, <code>status</code>, <code>plan</code> as <code>"action arg ..."</code> strings and <code>quality</code> {moves, optimal}; about 1.5 kB instead of 13 kB. Also on /solve and /replan</td></tr>
     </table></div>
     <div class="codebox"><pre>{"instruction": "Sort the objects by colour into the zones.",
  "images_b64": ["/9j/4AAQSkZJRg..."],
@@ -319,11 +326,12 @@ else:
     <div class="codebox"><pre>{"request_id": "20261120_101512_ab12cd",   // from the /plan answer (or the last /replan)
  "scene": { ...the scene as it is NOW... }}</pre></div>
     <p>Answer: like <code>/plan</code>, plus <code>decision</code> (<code>kept</code> or <code>replanned</code>), <code>changes</code> and, when kept, <code>done_actions</code>.</p>
+    <p><b>Failed step:</b> add <code>"failed": ["(place-on-table b1)"]</code> (or <code>[{"action": ..., "args": [...]}]</code>, or <code>[{"step": 2}]</code> from the previous plan). A failed place becomes <code>never_on [object, target]</code>, a failed pick keeps the object where it is; they are added to <code>constraints</code>, so they also hold for every later replan, and <code>failed_rules</code> says what was excluded.</p>
   </div>
 
   <div class="ep" id="ep-solve">
     <h3><span class="verb">POST</span>/solve</h3>
-    <p>Planner only: <code>{"scene": {...}, "goal": [...], "planner": "auto"}</code>. Useful to test scenes without a model.</p>
+    <p>Planner only: <code>{"scene": {...}, "goal": [...], "constraints": {...}, "ordered": false, "compact": false}</code>. Constraints work here exactly as in <code>/plan</code>.</p>
   </div>
 
   <div class="ep" id="ep-perceive">
@@ -460,7 +468,7 @@ netsh interface portproxy show v4tov4</pre></div>
   <ul class="plain">
     <li>Model times in this page are not measured yet on HEKATE; <code>/dashboard</code> shows them once requests run.</li>
     <li>The faster models (Qwen3-VL-2B, Qwen3.5, LFM2.5-VL) are configured but not yet compared: <code>scripts/compare_models.sh</code>.</li>
-    <li>No retry limit in <code>/replan</code>: a grasp that always fails comes back every time.</li>
+    <li>A step is only excluded when the robot reports it in <code>failed</code>; without that, a grasp that keeps failing comes back.</li>
     <li>"Shortest" counts pick and place moves for the scene as understood; arm travel distance is not part of it.</li>
     <li>A scene sent while an object is held in the gripper cannot be described; send scenes between moves.</li>
   </ul>
