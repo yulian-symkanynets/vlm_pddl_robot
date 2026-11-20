@@ -332,14 +332,23 @@ def formula_goal(raw_goal, sc: dict):
     flag = [g for g in entries if isinstance(g, dict) and 'formula' in g]
     if not flag:
         return None, None
-    if len(flag) != len(entries):
-        return None, 'the goal formula cannot be combined with other goal entries; put everything in the formula'
+    parts = []                                  # every formula entry, and plain entries, must hold together
+    for g in entries:
+        if isinstance(g, dict) and 'formula' in g:
+            f = g['formula']
+            parts.append(json.loads(f) if isinstance(f, str) else f)
+        else:
+            fixed = normalize_goal([g])
+            if not fixed:
+                return None, ('the goal formula can be combined only with other formulas and plain '
+                              f'{{"object", "on"/"in"}} entries, not with {json.dumps(g)[:60]}')
+            parts.append(fixed_to_formula(fixed))
+    formula = parts[0] if len(parts) == 1 else {'and': parts}
     try:
-        goal_logic.compile_goal(flag[0]['formula'], sc)
-    except goal_logic.FormulaError as e:
+        goal_logic.compile_goal(formula, sc)
+    except (goal_logic.FormulaError, json.JSONDecodeError) as e:
         return None, f'the goal formula is invalid: {e}'
-    f = flag[0]['formula']
-    return [('formula', f if isinstance(f, str) else json.dumps(f, sort_keys=True))], None
+    return [('formula', json.dumps(formula, sort_keys=True))], None
 
 
 def zone_stack_goal(raw_goal, sc: dict):
@@ -611,7 +620,8 @@ def plan_for(sc: dict, goal, planner: str = 'auto', constraints: dict | None = N
         if all(g[0] == 'col-ok' for g in goal):
             return plan_formula(sc, json.dumps(goal_logic.STACK_BY_COLOUR, sort_keys=True), cons, lower_bound=lb)
         if all(g[0] in FIXED for g in goal):
-            return plan_formula(sc, json.dumps(fixed_to_formula(goal), sort_keys=True), cons, lower_bound=lb)
+            return plan_formula(sc, json.dumps(fixed_to_formula(goal), sort_keys=True), cons, lower_bound=lb,
+                                must_move=plan_quality.must_move(sc['support'], sc['items'], goal))
     stack = bool(goal) and all(g[0] == 'col-ok' for g in goal)      # one stack per colour
     ptext = make_problem('openworld', sc['env'], sc['items'], sc['support'], goal, sc['hidden'])
     domain_pddl, domain_path = None, None
@@ -702,7 +712,7 @@ def verify_acts(sc: dict, acts, cons: dict):
 
 
 def plan_formula(sc: dict, formula_json: str, cons: dict, heuristic=None, lower_bound: int | None = None,
-                 label: str = 'goal-search') -> dict:
+                 label: str = 'goal-search', must_move: list | None = None) -> dict:
     """General goal: search for moves (formula_plan.py), then check the plan three times: the domain's
     simulator (every action allowed under the constraints), the scene's limits (sizes, tower height),
     and the formula on the final arrangement. `lower_bound` (moves no plan can avoid) gives a proof
@@ -738,7 +748,9 @@ def plan_formula(sc: dict, formula_json: str, cons: dict, heuristic=None, lower_
                'moved_more_than_once': sorted({x for x in picked if picked.count(x) > 1}),
                'note': None if proven else
                f'verified, not proven shortest (first plan {found["first"]} moves, best found {n}, '
-               f'search {found["seconds"]} s)'}
+               f'{found["expanded"]} arrangements searched)'}
+    if must_move is not None:
+        quality['must_move'] = sorted(must_move)
     return {**base, 'problem_pddl': ptext, 'quality': quality, 'verified': ok,
             'status': 'ok' if ok else 'error',
             'message': None if ok else ('plan failed verification: ' +
@@ -782,8 +794,9 @@ def plan_zone_stacks(sc: dict, zone_json: str, cons: dict) -> dict:
         return {'status': 'no_plan', 'message': '; '.join(impossible), 'plan': None, 'planner': 'precheck',
                 'planner_status': 'unsolvable', 'plan_s': 0.0}
     guide = lambda sup: colour_stacks.zone_unsettled(sup, colour, zone_of)       # noqa: E731
+    must = colour_stacks.zone_unsettled_set(sc['support'], colour, zone_of)
     return plan_formula(sc, json.dumps(goal_logic.stack_in_zones_formula(zone_of), sort_keys=True), cons,
-                        heuristic=guide, lower_bound=guide(sc['support']), label='zone-towers')
+                        heuristic=guide, lower_bound=len(must), label='zone-towers', must_move=must)
 
 
 def _fact_holds(f, sup: dict) -> bool:
@@ -825,13 +838,54 @@ def order_check(start: dict, steps, goal) -> dict:
             if not now:
                 became[i] = None
             state[i] = now
-    seq = [b for b in became if b is not None]
+    seq = [b for b in became if b]                 # 0 = true from the start and never undone: no order needed
     return {'achieved_at_move': became, 'in_order': None not in became and seq == sorted(seq)}
 
 
 def plan_ordered(sc: dict, goal, planner: str, cons: dict) -> dict:
-    """Goals in the given order ("first A, then B, then C"): plan stage by stage. Stage k reaches goals
-    1..k while the objects of goals 1..k-1 stay where they are, so an earlier goal is never undone."""
+    """Goals in the given order ("first A, then B, then C") as ONE search (formula_plan.find_ordered):
+    a reached goal is never undone and a later goal is never met before its turn. Exact A* within a fixed
+    budget, so the plan is the shortest and the same for the same request. Fallback (hidden objects,
+    budget exhausted): stage by stage."""
+    import formula_plan
+    import plan_quality
+    if sc['hidden']:
+        return plan_ordered_staged(sc, goal, planner, cons)
+    found = formula_plan.find_ordered(sc, goal, cons)
+    if found['moves'] is None:
+        if found['stopped'] == 'exhausted':
+            return {'status': 'no_plan', 'plan': None, 'planner': 'ordered', 'planner_status': 'unsolvable',
+                    'plan_s': found['seconds'],
+                    'message': 'the goals cannot be met in this order: every way to reach a later goal '
+                               'undoes an earlier one or meets a goal before its turn'}
+        return plan_ordered_staged(sc, goal, planner, cons)
+    acts = formula_plan.to_actions(found['moves'], sc)
+    if cons.get('first') and acts:
+        acts[0] = (acts[0][0].replace('pick-', 'pick-first-', 1), acts[0][1])
+    sim, ptext = verify_acts(sc, acts, cons)
+    broken = formula_plan.check_moves(sc, found['moves'], cons)
+    steps = robot_plan(acts)
+    order = order_check(sc['support'], steps, goal)
+    end = _apply_steps(sc['support'], steps)
+    ok = sim['ok'] and broken is None and order['in_order'] and all(_fact_holds(f, end) for f in goal)
+    quality = plan_quality.assess(sc, goal, steps, 'ordered', '')
+    quality['must_move'] = sorted(plan_quality.must_move(sc['support'], sc['items'], goal))
+    if found['optimal']:
+        quality.update(optimal=True, max_extra_moves=0,
+                       proof='exact search over the ordered task (A*, the estimate never overestimates)')
+    elif not quality['proof']:
+        quality['note'] = (f'the exact search stopped after {found["expanded"]} arrangements; '
+                           'verified, not proven shortest')
+    return {'status': 'ok' if ok else 'error', 'planner': 'ordered', 'planner_status':
+            'solved_optimal' if found['optimal'] else 'solved_satisficing', 'plan_s': found['seconds'],
+            'problem_pddl': ptext, 'quality': quality, 'verified': ok, 'order': order, 'plan': steps,
+            'message': None if ok else 'plan failed verification: ' +
+            (sim['fail_reason'] or broken or 'goals not met in order')}
+
+
+def plan_ordered_staged(sc: dict, goal, planner: str, cons: dict) -> dict:
+    """Fallback: plan stage by stage. Stage k reaches goals 1..k while the objects of goals 1..k-1 stay
+    where they are, so an earlier goal is never undone (not proven shortest)."""
     import plan_quality
     t0 = time.perf_counter()
     cur, steps, keep, hidden = dict(sc['support']), [], set(cons.get('keep') or []), list(sc['hidden'])

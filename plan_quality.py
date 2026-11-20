@@ -103,7 +103,7 @@ def assess(sc: dict, goal, plan, planner: str, planner_status: str = "") -> dict
         proof = "the plan moves only objects that must move, each once"
     else:
         proof = None
-    return {
+    out = {
         "moves": len(picked),
         "lower_bound": lb,
         "optimal": proof is not None,
@@ -111,3 +111,6 @@ def assess(sc: dict, goal, plan, planner: str, planner_status: str = "") -> dict
         "max_extra_moves": 0 if proof else len(picked) - lb,
         "moved_more_than_once": moved_twice,
     }
+    if all(g[0] in ("on", "in", "on-table") for g in goal):
+        out["must_move"] = sorted(must_move(sc["support"], sc["items"], goal))   # what the lower bound counts
+    return out

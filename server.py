@@ -51,6 +51,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import gzip
 import json
 import os
 import threading
@@ -149,13 +150,72 @@ def compact_answer(res: dict) -> dict:
     q = res.get('quality') or {}
     if q:
         out['quality'] = {'moves': q.get('moves'), 'optimal': q.get('optimal')}
+    if (res.get('timings') or {}).get('total_s') is not None:
+        out['total_s'] = res['timings']['total_s']       # server-side pipeline time; header X-Server-Ms = whole request
     return out
+
+
+class GzipRequests:
+    """Accept request bodies sent with Content-Encoding: gzip (the robot gzips by default)."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope['type'] != 'http' or dict(scope.get('headers') or []).get(b'content-encoding', b'').lower() != b'gzip':
+            return await self.app(scope, receive, send)
+        body, more = b'', True
+        while more:
+            msg = await receive()
+            body += msg.get('body', b'')
+            more = msg.get('more_body', False)
+        try:
+            data = gzip.decompress(body)
+        except (OSError, EOFError):
+            return await PlainTextResponse('request body says gzip but is not valid gzip', 400)(scope, receive, send)
+        headers = [(k, v) for k, v in scope['headers'] if k not in (b'content-encoding', b'content-length')]
+        scope = {**scope, 'headers': headers + [(b'content-length', str(len(data)).encode())]}
+        sent = False
+
+        async def replay():
+            nonlocal sent
+            if not sent:
+                sent = True
+                return {'type': 'http.request', 'body': data, 'more_body': False}
+            return await receive()
+        return await self.app(scope, replay, send)
+
+
+class GzipAnswers:
+    """gzip answers for clients that send Accept-Encoding: gzip; images and camera streams stay as they are."""
+
+    def __init__(self, app):
+        from starlette.middleware.gzip import GZipMiddleware
+        self.app, self.gz = app, GZipMiddleware(app, minimum_size=500)
+
+    async def __call__(self, scope, receive, send):
+        path = scope.get('path', '') if scope['type'] == 'http' else ''
+        if path and not path.startswith(('/stream', '/images', '/dashboard/files')):
+            return await self.gz(scope, receive, send)
+        return await self.app(scope, receive, send)
 
 
 def create_app(vlm, max_visual_tokens: int = 1024, log_dir: Path = LOG_DIR, memory=None) -> FastAPI:
     app = FastAPI(title='VLM + PDDL planning server', version='1.0')
     # allow the web page also when it is opened as a file or from another host/port
-    app.add_middleware(CORSMiddleware, allow_origins=['*'], allow_methods=['*'], allow_headers=['*'])
+    app.add_middleware(CORSMiddleware, allow_origins=['*'], allow_methods=['*'], allow_headers=['*'],
+                       expose_headers=['X-Server-Ms'])
+    app.add_middleware(GzipAnswers)
+    app.add_middleware(GzipRequests)
+
+    @app.middleware('http')
+    async def server_time(request: Request, call_next):
+        """X-Server-Ms: milliseconds from the request arriving to the answer leaving the handler, so a
+        client can split its own round trip into server time and network time."""
+        t0 = time.perf_counter()
+        response = await call_next(request)
+        response.headers['X-Server-Ms'] = f'{(time.perf_counter() - t0) * 1000:.1f}'
+        return response
     gpu_lock = threading.Lock()           # one GPU: one model call at a time
     state = {'started': time.time(), 'requests': 0}
 

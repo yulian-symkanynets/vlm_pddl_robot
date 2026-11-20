@@ -103,6 +103,10 @@ def to_actions(moves, final_support: dict[str, str] | None = None) -> list[tuple
 
 
 def zone_unsettled(sup: dict, colour: dict, zone_of: dict) -> int:
+    return len(zone_unsettled_set(sup, colour, zone_of))
+
+
+def zone_unsettled_set(sup: dict, colour: dict, zone_of: dict) -> set:
     """Goal "one tower per colour, standing in the zone of that colour": objects that must still move.
 
     For each colour the best tower already in place is kept: an object of that colour directly in its
@@ -110,14 +114,16 @@ def zone_unsettled(sup: dict, colour: dict, zone_of: dict) -> int:
     the wrong place, on the wrong object, above such an object, or a second base). So this is a lower
     bound on the moves, and it guides the search for this goal."""
     above = {y: x for x, y in sup.items() if y in colour}
-    settled = 0
+    settled = set()
     for c, z in zone_of.items():
-        best = 0
-        for x, s in sup.items():
-            if s == z and colour.get(x) == c:
-                k, cur = 1, x
+        best = []
+        for x in sorted(sup):
+            if sup[x] == z and colour.get(x) == c:
+                chain, cur = [x], x
                 while cur in above and colour.get(above[cur]) == c:
-                    cur, k = above[cur], k + 1
-                best = max(best, k)
-        settled += best
-    return len(sup) - settled
+                    cur = above[cur]
+                    chain.append(cur)
+                if len(chain) > len(best):
+                    best = chain
+        settled |= set(best)
+    return set(sup) - settled

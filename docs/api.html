@@ -188,7 +188,7 @@ else:
     <tr><td><code>color</code></td><td>Colour of the paper, used for "sort by colour".</td></tr>
     <tr><td><code>capacity</code></td><td>How many objects fit directly on it. Objects stacked on top of each other inside a zone do not count as "in the zone".</td></tr>
     <tr><td><code>kind</code></td><td><code>zone</code> (default), <code>box</code>, <code>tray</code>, <code>bin</code>, <code>shelf</code>. A box may have <code>"open": false</code>.</td></tr>
-    <tr><td><code>max_height_mm</code></td><td>A tower standing in this place may not be taller (sum of <code>height_mm</code>).</td></tr>
+    <tr><td><code>max_height_mm</code></td><td>The whole tower standing in this place, base object included, may not be taller (sum of <code>height_mm</code>; the zone surface counts as table level).</td></tr>
     <tr><td><code>max_top</code> / <code>max_objects</code></td><td>At most this many objects in one tower in this place.</td></tr>
   </table></div>
   <p>Optional <code>"rules"</code> for the whole scene: <code>{"max_height_mm": 250, "max_objects": 4, "no_larger_on_smaller": true}</code>. They apply to every tower, also on the table, and while the plan runs, not only at the end. With limits, plans come from the general search; impossible limits are explained at once.</p>
@@ -245,7 +245,7 @@ else:
   <p>Normally you send the task in words (<code>instruction</code>, any language the model understands). The model turns it into goal facts and constraints; the response shows what it understood in <code>goal</code> and <code>constraints</code>. You can also send them yourself, which skips the model call.</p>
   <div class="tablewrap"><table>
     <tr><th>Goal entry</th><th>Means</th></tr>
-    <tr><td><code>{"object": "a", "in": "red_zone"}</code></td><td>a ends directly in the zone</td></tr>
+    <tr><td><code>{"object": "a", "in": "red_zone"}</code></td><td>a ends <b>directly</b> in a slot of the zone (capacity counts). An object stacked on another object inside the zone is not "in" it: for towers in zones use <code>stack_in_zones</code> or <code>on</code> entries</td></tr>
     <tr><td><code>{"object": "a", "on": "b"}</code></td><td>a ends directly on b (a tower is several entries)</td></tr>
     <tr><td><code>{"object": "a", "on": "table"}</code></td><td>a ends on the open table</td></tr>
     <tr><td><code>{"sort_by_color": true}</code></td><td>every object into the zone of its own colour; the server expands it, and an explicit entry for one object overrides it</td></tr>
@@ -303,8 +303,8 @@ else:
       <tr><td><code>crop</code></td><td>[x0, y0, x1, y1]</td><td>–</td><td>keep only the work area, fractions 0–1</td></tr>
       <tr><td><code>attempts</code></td><td>1–5</td><td>3</td><td>retries when the model writes something unreadable</td></tr>
       <tr><td><code>planner</code></td><td>string</td><td>auto</td><td><code>auto</code>, <code>fast-downward</code>, <code>fast-downward-opt</code>, <code>pyperplan</code></td></tr>
-      <tr><td><code>ordered</code></td><td>bool</td><td>as read</td><td>the goal list is a sequence: goals are met in this order and an earlier goal is never undone (answer: <code>order.achieved_at_move</code>). The model sets it for "first ..., then ..."</td></tr>
-      <tr><td><code>compact</code></td><td>bool</td><td>false</td><td>answer only <code>request_id</code>, <code>status</code>, <code>plan</code> as <code>"action arg ..."</code> strings and <code>quality</code> {moves, optimal}; about 1.5 kB instead of 13 kB. Also on /solve and /replan</td></tr>
+      <tr><td><code>ordered</code></td><td>bool</td><td>as read</td><td>the goal list is a sequence: a reached goal is never undone and a later goal is never met before its turn (a goal already true at the start may wait). One exact search over the whole sequence: the shortest plan, the same answer every time. Answer: <code>order.achieved_at_move</code>. The model sets it for "first ..., then ..."</td></tr>
+      <tr><td><code>compact</code></td><td>bool</td><td>false</td><td>answer only <code>request_id</code>, <code>status</code>, <code>plan</code> as <code>"action arg ..."</code> strings and <code>quality</code> {moves, optimal}; about 1.5 kB instead of 13 kB, plus <code>total_s</code> (server pipeline time). Also on /solve and /replan; the <code>request_id</code> works for /replan as usual</td></tr>
     </table></div>
     <div class="codebox"><pre>{"instruction": "Sort the objects by colour into the zones.",
  "images_b64": ["/9j/4AAQSkZJRg..."],
@@ -396,7 +396,8 @@ else:
 }</pre></div>
   <div class="tablewrap"><table>
     <tr><th>Field</th><th>Meaning</th></tr>
-    <tr><td><code>quality</code></td><td><code>optimal</code> true means proven shortest: either the moves equal <code>lower_bound</code> (objects that must move at least once), or the optimal search <code>astar(lmcut())</code> found it. <code>moved_more_than_once</code> lists objects that had to be parked on the way.</td></tr>
+    <tr><td><code>quality</code></td><td><code>optimal</code> true means proven shortest: either the moves equal <code>lower_bound</code> (objects that must move at least once), or the optimal search <code>astar(lmcut())</code> found it. <code>moved_more_than_once</code> lists objects that had to be parked on the way. <code>must_move</code> lists the objects the lower bound counts: compare it with another planner's plan to see where the readings differ.</td></tr>
+    <tr><td>headers</td><td>Every answer has <code>X-Server-Ms</code> (milliseconds inside the server), so client round trip minus this is network time. Requests may be sent with <code>Content-Encoding: gzip</code>; with <code>Accept-Encoding: gzip</code> JSON answers come back compressed (four towers, compact: 1.5 kB to 0.4 kB).</td></tr>
     <tr><td><code>timings</code></td><td><code>perceive_s</code> (image to scene), <code>goal_s</code> (instruction to goal), <code>plan_s</code>, <code>total_s</code>, in seconds</td></tr>
     <tr><td><code>memory</code></td><td><code>hit</code> means the answer came from the experience database (same input as before), <code>miss</code> means it was computed</td></tr>
     <tr><td><code>resolution</code></td><td>for photos: level used and every level tried, with image tokens and bytes</td></tr>

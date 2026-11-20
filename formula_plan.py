@@ -22,9 +22,13 @@ import goal_logic
 from scenes import slot_names
 
 FIRST_WEIGHT = 30                # greedy: a first plan fast, even with 50+ objects
-IMPROVE_WEIGHTS = (10, 5, 3, 2)  # then shorter plans while time allows
-IMPROVE_ROUND_S = 0.4
-LIMIT_S = 8.0                    # an impossible goal is only given up after this long
+IMPROVE_WEIGHTS = (10, 5, 3, 2)  # then shorter plans within a budget
+# Budgets count arrangements, not seconds: the same request always gets the same answer, however
+# busy the machine is. LIMIT_S only guards against a runaway search (then the answer says so).
+FIRST_NODES = 40_000
+IMPROVE_NODES = 4_000
+ORDER_NODES = 100_000            # exact search for ordered goals before falling back to a greedy one
+LIMIT_S = 30.0
 
 
 class Mover:
@@ -144,18 +148,26 @@ def find_moves(sc: dict, goal: goal_logic.Goal, cons: dict | None = None, limit_
     if done(start):
         return {'moves': [], 'first': 0, 'expanded': 0, 'seconds': 0.0, 'reason': None}
 
-    def run(weight, deadline, bound):
+    stopped = ['done']
+
+    def run(weight, budget, bound):
         key = lambda s: tuple(sorted(s.items()))            # noqa: E731
         tie = itertools.count()
         h0 = h(start)
         pq = [(weight * h0, h0, 0, next(tie), start, [])]
         seen = {key(start): 0}
+        used = 0
         while pq:
             f, hv, g, _, sup, path = heapq.heappop(pq)
             expanded[0] += 1
+            used += 1
             if g and hv == 0 and done(sup):
                 return path
-            if time.perf_counter() > deadline:
+            if used > budget:
+                stopped[0] = 'budget'
+                return None
+            if time.perf_counter() - t0 > limit_s:
+                stopped[0] = 'time'
                 return None
             if bound is not None and g + 1 >= bound:
                 continue
@@ -172,20 +184,92 @@ def find_moves(sc: dict, goal: goal_logic.Goal, cons: dict | None = None, limit_
                 heapq.heappush(pq, (g + 1 + weight * hn, hn, g + 1, next(tie), new, path + [(x, dst)]))
         return None
 
-    best = run(FIRST_WEIGHT, t0 + limit_s, None)
+    best = run(FIRST_WEIGHT, FIRST_NODES, None)
     out = {'first': len(best) if best else None}
     if best:
         for w in IMPROVE_WEIGHTS:
-            if time.perf_counter() - t0 > limit_s:
+            if stopped[0] == 'time':
                 break
-            better = run(w, min(t0 + limit_s, time.perf_counter() + IMPROVE_ROUND_S), len(best))
+            better = run(w, IMPROVE_NODES, len(best))
             if better and len(better) < len(best):
                 best = better
-    out.update(moves=best, expanded=expanded[0], seconds=round(time.perf_counter() - t0, 3),
-               reason=None if best else f'no sequence of moves reached the goal within {limit_s:g} s '
-                                        f'({expanded[0]} arrangements tried); it may be impossible '
-                                        'with these objects, places and constraints')
+    out.update(moves=best, expanded=expanded[0], seconds=round(time.perf_counter() - t0, 3), stopped=stopped[0],
+               reason=None if best else f'no sequence of moves reached the goal ({expanded[0]} arrangements tried'
+                                        f'{", stopped by the time guard" if stopped[0] == "time" else ""}); '
+                                        'it may be impossible with these objects, places and constraints')
     return out
+
+
+def _fact(f, sup: dict) -> bool:
+    return sup.get(f[1]) == ('table' if f[0] == 'on-table' else f[2])
+
+
+def find_ordered(sc: dict, goal: list, cons: dict | None = None, max_nodes: int | None = None) -> dict:
+    """Ordered goals ("first A, then B ..."), searched as ONE task. The state is the arrangement plus how
+    many goals are reached. A move may not undo a reached goal and may not meet a later goal before its
+    turn (a goal that is already true from the start may wait). A* with an estimate that never
+    overestimates (objects the remaining goals force to move): the first plan found is the shortest.
+    If the exact search runs out of budget, a greedy search gives a verified, unproven plan.
+    -> {'moves', 'optimal', 'stopped' ('done' | 'exhausted' = impossible | 'budget' | 'time'), 'expanded', 'seconds'}"""
+    import plan_quality
+    t0 = time.perf_counter()
+    items, n = sc['items'], len(goal)
+    mover = Mover(sc, cons or {})
+    first = (cons or {}).get('first')
+    first = first[0] if isinstance(first, list) and first else first
+    start = dict(sc['support'])
+
+    def advance(sup, k):
+        while k < n and _fact(goal[k], sup):
+            k += 1
+        return k
+
+    def h(sup, k):
+        return len(plan_quality.must_move(sup, items, goal[k:])) if k < n else 0
+
+    k0 = advance(start, 0)
+    if k0 == n:
+        return {'moves': [], 'optimal': True, 'stopped': 'done', 'expanded': 0, 'seconds': 0.0}
+    key = lambda s: tuple(sorted(s.items()))                # noqa: E731
+
+    def search(weight, budget):
+        tie = itertools.count()
+        h0 = h(start, k0)
+        pq = [(weight * h0, h0, 0, next(tie), start, k0, [])]
+        seen = {(key(start), k0): 0}
+        used = 0
+        while pq:
+            f, hv, g, _, sup, k, path = heapq.heappop(pq)
+            if k == n:
+                return path, used, 'done'
+            used += 1
+            if used > budget:
+                return None, used, 'budget'
+            if time.perf_counter() - t0 > LIMIT_S:
+                return None, used, 'time'
+            for x, dst in mover.moves(sup, first if g == 0 else None):
+                new = dict(sup)
+                new[x] = dst
+                if any(not _fact(goal[j], new) for j in range(k)):
+                    continue                                  # would undo a goal already reached
+                if any(_fact(goal[j], new) and not _fact(goal[j], sup) for j in range(k + 1, n)):
+                    continue                                  # would meet a later goal before its turn
+                k2 = advance(new, k)
+                state = (key(new), k2)
+                if seen.get(state, 1 << 30) <= g + 1:
+                    continue
+                seen[state] = g + 1
+                hn = h(new, k2)
+                heapq.heappush(pq, (g + 1 + weight * hn, hn, g + 1, next(tie), new, k2, path + [(x, dst)]))
+        return None, used, 'exhausted'
+
+    path, used, stopped = search(1, max_nodes or ORDER_NODES)
+    optimal = path is not None
+    if path is None and stopped == 'budget':
+        path, more, stopped = search(3, max_nodes or ORDER_NODES)
+        used += more
+    return {'moves': path, 'optimal': optimal, 'stopped': stopped, 'expanded': used,
+            'seconds': round(time.perf_counter() - t0, 3)}
 
 
 def to_actions(moves, sc: dict) -> list[tuple[str, list[str]]]:

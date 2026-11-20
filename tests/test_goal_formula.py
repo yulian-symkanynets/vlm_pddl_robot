@@ -96,7 +96,7 @@ def test_already_true_goal_needs_no_moves():
 
 
 def test_constraints_are_respected(monkeypatch):
-    monkeypatch.setattr(formula_plan, 'LIMIT_S', 1.5)             # impossible goals are searched until this
+    monkeypatch.setattr(formula_plan, 'FIRST_NODES', 3000)        # impossible goals are searched until this budget
     r = openworld.run(scene=SCENE, goal=[{"formula": {"on_table": ["green_cube_2"]}}], constraints={"no_table": True})
     assert r["status"] == "no_plan"                                   # it must reach the table, but none may be used
     r = openworld.run(scene=SCENE, goal=[{"formula": {"in": ["red_block_1", "red_zone"]}}],

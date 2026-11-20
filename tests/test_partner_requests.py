@@ -33,7 +33,7 @@ def test_ordered_goals_are_met_in_order_or_refused(client):
     r = client.post('/solve', json={'scene': ABC, 'goal': later_first}).json()
     assert r['status'] == 'ok'                                                    # unordered: fine (b on a, then c on b)
     r = client.post('/solve', json={'scene': ABC, 'goal': later_first, 'ordered': True}).json()
-    assert r['status'] == 'no_plan' and 'without undoing goals 1-1' in r['message']
+    assert r['status'] == 'no_plan' and 'cannot be met in this order' in r['message']
     r = client.post('/solve', json={'scene': ABC, 'goal': later_first[::-1], 'ordered': True}).json()
     assert r['status'] == 'ok' and r['order'] == {'achieved_at_move': [1, 2], 'in_order': True}
     assert [s['pddl'] for s in r['plan']] == ['(pick-from-table b)', '(place-on-item b a)',
@@ -157,10 +157,106 @@ def test_compact_answer_is_small_and_replan_still_works(client):
     full = client.post('/solve', json=body)
     small = client.post('/solve', json={**body, 'compact': True})
     s = small.json()
-    assert set(s) == {'request_id', 'status', 'plan', 'quality'} and s['quality'] == {'moves': 16, 'optimal': True}
+    assert set(s) == {'request_id', 'status', 'plan', 'quality', 'total_s'} and s['quality'] == {'moves': 16, 'optimal': True}
     assert s['plan'][0] == ' '.join([full.json()['plan'][0]['action'], *full.json()['plan'][0]['args']])
     assert len(small.content) < len(full.content) / 3
     r = client.post('/replan', json={'request_id': s['request_id'], 'scene': FOUR, 'compact': True}).json()
-    assert r['status'] == 'ok' and r['decision'] == 'kept' and set(r) <= {'request_id', 'status', 'plan', 'quality', 'decision'}
+    assert r['status'] == 'ok' and r['decision'] == 'kept' and set(r) <= {'request_id', 'status', 'plan', 'quality', 'decision', 'total_s'}
     q = client.post('/plan', json={'instruction': 'put it on the other one', 'scene': FOUR, 'compact': True}).json()
     assert q['status'] == 'clarify' and q['message']
+
+
+# ------------------------------------------------------------------- round 2 (v2 feedback)
+import collections
+import gzip
+import random
+
+import formula_plan
+
+
+def brute_force_ordered(sc, goal, cons=None):
+    """Shortest plan length under the same order rules, by plain breadth-first search (no estimate)."""
+    mover, n = formula_plan.Mover(sc, cons or {}), len(goal)
+    fact = formula_plan._fact
+
+    def advance(sup, k):
+        while k < n and fact(goal[k], sup):
+            k += 1
+        return k
+    start = dict(sc['support'])
+    q = collections.deque([(start, advance(start, 0), 0)])
+    seen = {(tuple(sorted(start.items())), q[0][1])}
+    while q:
+        sup, k, d = q.popleft()
+        if k == n:
+            return d
+        for x, dst in mover.moves(sup):
+            new = {**sup, x: dst}
+            if any(not fact(goal[j], new) for j in range(k)) or \
+                    any(fact(goal[j], new) and not fact(goal[j], sup) for j in range(k + 1, n)):
+                continue
+            k2 = advance(new, k)
+            key = (tuple(sorted(new.items())), k2)
+            if key not in seen:
+                seen.add(key)
+                q.append((new, k2, d + 1))
+    return None
+
+
+@pytest.mark.parametrize('seed', range(12))
+def test_ordered_search_finds_the_true_shortest_plan(seed):
+    rnd = random.Random(seed)
+    ids = [f'o{i}' for i in range(6)]
+    objs, tops = [], []
+    for x in ids:                                                   # random towers
+        on = rnd.choice(tops + ['table', 'table'])
+        if on != 'table':
+            tops.remove(on)
+        objs.append({'id': x, 'on': on})
+        tops.append(x)
+    scene = {'objects': objs, 'zones': [{'id': 'zone_a', 'capacity': 2}, {'id': 'zone_b', 'capacity': 2}]}
+    sc = openworld.normalize_scene(scene)
+    a, b, c, d = rnd.sample(ids, 4)
+    goal = [('in', a, 'zone_a'), ('on', b, a), ('on-table', c), ('in', d, 'zone_b')]
+    best = brute_force_ordered(sc, goal)
+    r = openworld.plan_for(sc, goal, ordered=True)
+    if best is None:
+        assert r['status'] == 'no_plan'
+    else:
+        assert r['status'] == 'ok' and r['quality']['moves'] == best and r['quality']['optimal'], (seed, best, r['quality'])
+        assert r['order']['in_order']
+
+
+def test_ordered_answers_do_not_change_between_runs(client):
+    goal = [{'object': 'green_cube_2', 'in': 'green_zone'}, {'object': 'red_cube_1', 'in': 'red_zone'},
+            {'object': 'yellow_bar_2', 'on': 'red_cube_1'}, {'object': 'blue_cube_1', 'on': 'table'}]
+    plans = [client.post('/solve', json={'scene': FOUR, 'goal': goal, 'ordered': True}).json() for _ in range(3)]
+    assert all(p['status'] == 'ok' for p in plans)
+    assert len({json.dumps(p['plan']) for p in plans}) == 1 and plans[0]['quality']['optimal']
+
+
+def test_several_formula_entries_must_all_hold(client):
+    goal = [{'formula': {'in': ['red_cube_1', 'red_zone']}}, {'formula': {'in': ['blue_cube_1', 'blue_zone']}},
+            {'object': 'green_cube_2', 'in': 'green_zone'}]
+    r = client.post('/solve', json={'scene': FOUR, 'goal': goal}).json()
+    assert r['status'] == 'ok'
+    sup = final(FOUR, r['plan'])
+    assert sup['red_cube_1'] == 'red_zone' and sup['blue_cube_1'] == 'blue_zone' and sup['green_cube_2'] == 'green_zone'
+
+
+def test_quality_lists_the_objects_the_lower_bound_counts(client):
+    r = client.post('/solve', json={'scene': FOUR, 'goal': [{'stack_in_zones': True}]}).json()
+    assert r['quality']['lower_bound'] == len(r['quality']['must_move']) == 16
+    r = client.post('/solve', json={'scene': ABC, 'goal': [{'object': 'c', 'on': 'b'}]}).json()
+    assert r['quality']['must_move'] == ['c']
+
+
+def test_server_time_and_gzip_both_ways(client):
+    body = json.dumps({'scene': FOUR, 'goal': [{'sort_by_color': True}], 'compact': True}).encode()
+    r = client.post('/solve', content=gzip.compress(body),
+                    headers={'Content-Type': 'application/json', 'Content-Encoding': 'gzip', 'Accept-Encoding': 'gzip'})
+    assert r.status_code == 200 and r.headers['content-encoding'] == 'gzip'
+    assert float(r.headers['x-server-ms']) > 0 and r.json()['total_s'] > 0
+    assert int(r.headers['content-length']) < len(r.content)            # compressed on the wire
+    bad = client.post('/solve', content=b'nope', headers={'Content-Type': 'application/json', 'Content-Encoding': 'gzip'})
+    assert bad.status_code == 400
