@@ -23,12 +23,20 @@ from scenes import slot_names
 
 FIRST_WEIGHT = 30                # greedy: a first plan fast, even with 50+ objects
 IMPROVE_WEIGHTS = (10, 5, 3, 2)  # then shorter plans within a budget
-# Budgets count arrangements, not seconds: the same request always gets the same answer, however
-# busy the machine is. LIMIT_S only guards against a runaway search (then the answer says so).
-FIRST_NODES = 40_000
-IMPROVE_NODES = 4_000
-ORDER_NODES = 100_000            # exact search for ordered goals before falling back to a greedy one
+# Budgets count estimate evaluations (one per arrangement looked at), not seconds: the same request
+# always gets the same answer, however busy the machine is. LIMIT_S only guards against a runaway
+# search (then the answer says so).
+FIRST_NODES = 300_000
+IMPROVE_NODES = 30_000
+ORDER_NODES = 600_000            # exact search for ordered goals before falling back to a greedy one
 LIMIT_S = 30.0
+
+
+def scaled(budget: int, n_objects: int) -> int:
+    """Looking at one arrangement costs more in a bigger scene (more moves, longer formulas), so the
+    budget shrinks with the scene size: still the same answer for the same request, and about the same
+    time for 16 or 48 objects."""
+    return max(2_000, int(budget * min(1.0, (16 / max(n_objects, 1)) ** 2)))
 
 
 class Mover:
@@ -180,7 +188,7 @@ def check_moves(sc: dict, moves, cons: dict | None = None) -> str | None:
     return None
 
 
-EXACT_NODES = 60_000             # exact phase (plain A*) when a lower-bound estimate is known
+EXACT_NODES = 400_000            # exact phase (plain A*) when a lower-bound estimate is known
 
 
 def find_moves(sc: dict, goal: goal_logic.Goal, cons: dict | None = None, limit_s: float | None = None,
@@ -219,7 +227,6 @@ def find_moves(sc: dict, goal: goal_logic.Goal, cons: dict | None = None, limit_
         while pq:
             f, hv, g, _, sup, path = heapq.heappop(pq)
             expanded[0] += 1
-            used += 1
             if g and hv == 0 and done(sup):
                 return path
             if used > budget:
@@ -237,6 +244,7 @@ def find_moves(sc: dict, goal: goal_logic.Goal, cons: dict | None = None, limit_
                 if seen.get(k, 1 << 30) <= g + 1:
                     continue
                 seen[k] = g + 1
+                used += 1
                 hn = hf(new)
                 if hn == 0 and not done(new):
                     hn = 1                                    # the guide says done, the goal does not
@@ -244,7 +252,7 @@ def find_moves(sc: dict, goal: goal_logic.Goal, cons: dict | None = None, limit_
         return None
 
     if exact is not None:                                    # never overestimates -> the first plan is shortest
-        found = run(1, EXACT_NODES, None, guide=exact)
+        found = run(1, scaled(EXACT_NODES, len(items)), None, guide=exact)
         if found is not None:
             return {'moves': found, 'first': len(found), 'expanded': expanded[0], 'optimal': True,
                     'seconds': round(time.perf_counter() - t0, 3), 'stopped': 'done', 'reason': None}
@@ -253,13 +261,13 @@ def find_moves(sc: dict, goal: goal_logic.Goal, cons: dict | None = None, limit_
                     'seconds': round(time.perf_counter() - t0, 3),
                     'reason': 'no plan exists with these objects, places, limits and constraints (complete search)'}
         stopped[0] = 'done'
-    best = run(FIRST_WEIGHT, FIRST_NODES, None)
+    best = run(FIRST_WEIGHT, scaled(FIRST_NODES, len(items)), None)
     out = {'first': len(best) if best else None, 'optimal': False}
     if best:
         for w in IMPROVE_WEIGHTS:
             if stopped[0] == 'time':
                 break
-            better = run(w, IMPROVE_NODES, len(best))
+            better = run(w, scaled(IMPROVE_NODES, len(items)), len(best))
             if better and len(better) < len(best):
                 best = better
     out.update(moves=best, expanded=expanded[0], seconds=round(time.perf_counter() - t0, 3), stopped=stopped[0],
@@ -311,7 +319,6 @@ def find_ordered(sc: dict, goal: list, cons: dict | None = None, max_nodes: int 
             f, hv, g, _, sup, k, path = heapq.heappop(pq)
             if k == n:
                 return path, used, 'done'
-            used += 1
             if used > budget:
                 return None, used, 'budget'
             if time.perf_counter() - t0 > LIMIT_S:
@@ -328,6 +335,7 @@ def find_ordered(sc: dict, goal: list, cons: dict | None = None, max_nodes: int 
                 if seen.get(state, 1 << 30) <= g + 1:
                     continue
                 seen[state] = g + 1
+                used += 1
                 hn = h(new, k2)
                 heapq.heappush(pq, (g + 1 + weight * hn, hn, g + 1, next(tie), new, k2, path + [(x, dst)]))
         return None, used, 'exhausted'

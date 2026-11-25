@@ -1,0 +1,160 @@
+[
+ {
+  "id": "stack",
+  "instruction": "Rearrange the objects so that every stack is one colour.",
+  "reference": {
+   "and": [
+    {
+     "forall": {
+      "x": "object"
+     },
+     "body": {
+      "or": [
+       {
+        "on_table": [
+         "x"
+        ]
+       },
+       {
+        "exists": {
+         "y": "object"
+        },
+        "where": {
+         "same_color": [
+          "x",
+          "y"
+         ]
+        },
+        "body": {
+         "on": [
+          "x",
+          "y"
+         ]
+        }
+       }
+      ]
+     }
+    },
+    {
+     "forall": {
+      "x": "object",
+      "y": "object"
+     },
+     "where": {
+      "and": [
+       {
+        "same_color": [
+         "x",
+         "y"
+        ]
+       },
+       {
+        "not": {
+         "is": [
+          "x",
+          "y"
+         ]
+        }
+       }
+      ]
+     },
+     "body": {
+      "not": {
+       "and": [
+        {
+         "on_table": [
+          "x"
+         ]
+        },
+        {
+         "on_table": [
+          "y"
+         ]
+        }
+       ]
+      }
+     }
+    }
+   ]
+  }
+ },
+ {
+  "id": "stack_sk",
+  "instruction": "Prerob veže tak, aby každá veža mala len jednu farbu.",
+  "reference": {
+   "and": [
+    {
+     "forall": {
+      "x": "object"
+     },
+     "body": {
+      "or": [
+       {
+        "on_table": [
+         "x"
+        ]
+       },
+       {
+        "exists": {
+         "y": "object"
+        },
+        "where": {
+         "same_color": [
+          "x",
+          "y"
+         ]
+        },
+        "body": {
+         "on": [
+          "x",
+          "y"
+         ]
+        }
+       }
+      ]
+     }
+    },
+    {
+     "forall": {
+      "x": "object",
+      "y": "object"
+     },
+     "where": {
+      "and": [
+       {
+        "same_color": [
+         "x",
+         "y"
+        ]
+       },
+       {
+        "not": {
+         "is": [
+          "x",
+          "y"
+         ]
+        }
+       }
+      ]
+     },
+     "body": {
+      "not": {
+       "and": [
+        {
+         "on_table": [
+          "x"
+         ]
+        },
+        {
+         "on_table": [
+          "y"
+         ]
+        }
+       ]
+      }
+     }
+    }
+   ]
+  }
+ }
+]

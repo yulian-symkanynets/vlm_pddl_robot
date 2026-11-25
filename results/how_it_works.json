@@ -1,0 +1,603 @@
+{
+ "measured": "2026-11-22T19:42:14",
+ "machine": "Darwin arm64, Python 3.13.9",
+ "model": "none (goals given or read by the rule-based stand-in)",
+ "example": {
+  "request_bytes": 1567,
+  "scene_bytes": 1495,
+  "photo_bytes_median": 265781,
+  "photos": 12,
+  "goal_answer": "{\"goal\": [{\"sort_by_color\": true}]}",
+  "goal": [
+   {
+    "object": "green_bar_1",
+    "in": "green_zone"
+   },
+   {
+    "object": "blue_block_1",
+    "in": "blue_zone"
+   },
+   {
+    "object": "yellow_block_1",
+    "in": "yellow_zone"
+   },
+   {
+    "object": "red_block_1",
+    "in": "red_zone"
+   },
+   {
+    "object": "yellow_bar_1",
+    "in": "yellow_zone"
+   },
+   {
+    "object": "red_bar_1",
+    "in": "red_zone"
+   },
+   {
+    "object": "green_cube_1",
+    "in": "green_zone"
+   },
+   {
+    "object": "blue_block_2",
+    "in": "blue_zone"
+   },
+   {
+    "object": "red_block_2",
+    "in": "red_zone"
+   },
+   {
+    "object": "yellow_cylinder_1",
+    "in": "yellow_zone"
+   },
+   {
+    "object": "green_bar_2",
+    "in": "green_zone"
+   },
+   {
+    "object": "blue_cube_1",
+    "in": "blue_zone"
+   },
+   {
+    "object": "blue_bar_1",
+    "in": "blue_zone"
+   },
+   {
+    "object": "red_cube_1",
+    "in": "red_zone"
+   },
+   {
+    "object": "yellow_bar_2",
+    "in": "yellow_zone"
+   },
+   {
+    "object": "green_cube_2",
+    "in": "green_zone"
+   }
+  ],
+  "first_steps": [
+   "(pick-from-item blue_block_2 green_cube_1)",
+   "(place-in blue_block_2 blue_zone_s4 blue_zone)",
+   "(pick-from-item blue_cube_1 green_bar_2)",
+   "(place-in blue_cube_1 blue_zone_s3 blue_zone)",
+   "(pick-from-item green_bar_2 yellow_cylinder_1)",
+   "(place-in green_bar_2 green_zone_s4 green_zone)"
+  ],
+  "steps": 32,
+  "status": "ok",
+  "planner": "fast-downward",
+  "moves": 16,
+  "lower_bound": 16,
+  "optimal": true,
+  "proof": "the plan moves only objects that must move, each once",
+  "plan_s": 0.198,
+  "wall_s": 0.285,
+  "message": null
+ },
+ "goal_types": [
+  {
+   "name": "sort_by_color",
+   "words": "every object into the zone of its colour",
+   "status": "ok",
+   "planner": "fast-downward",
+   "moves": 16,
+   "lower_bound": 16,
+   "optimal": true,
+   "proof": "the plan moves only objects that must move, each once",
+   "plan_s": 0.171,
+   "wall_s": 0.236,
+   "message": null
+  },
+  {
+   "name": "sort_by_color + no_table",
+   "words": "the same, the table may not be used",
+   "status": "ok",
+   "planner": "fast-downward",
+   "moves": 16,
+   "lower_bound": 16,
+   "optimal": true,
+   "proof": "the plan moves only objects that must move, each once",
+   "plan_s": 0.165,
+   "wall_s": 0.234,
+   "message": null
+  },
+  {
+   "name": "stack_by_color",
+   "words": "one stack per colour, anywhere on the table",
+   "status": "ok",
+   "planner": "colour-stacks",
+   "moves": 15,
+   "lower_bound": 12,
+   "optimal": true,
+   "proof": "exact search for one stack per colour: A* whose estimate (objects that must still move) is never too high",
+   "plan_s": 1.321,
+   "wall_s": 1.433,
+   "message": null
+  },
+  {
+   "name": "stack_in_zones + no_table",
+   "words": "one tower per colour in its zone, no table",
+   "status": "ok",
+   "planner": "zone-towers",
+   "moves": 16,
+   "lower_bound": 16,
+   "optimal": true,
+   "proof": "the plan moves only objects that must move, each once",
+   "plan_s": 0.005,
+   "wall_s": 0.073,
+   "message": null
+  },
+  {
+   "name": "formula",
+   "words": "every cube into the red zone",
+   "status": "ok",
+   "planner": "goal-search",
+   "moves": 6,
+   "lower_bound": null,
+   "optimal": false,
+   "proof": null,
+   "plan_s": 0.563,
+   "wall_s": 0.619,
+   "message": null
+  },
+  {
+   "name": "ordered (3 goals)",
+   "words": "first green cube 2 on the table, then red block 1 on it, then blue block 2 on that",
+   "status": "ok",
+   "planner": "ordered",
+   "moves": 3,
+   "lower_bound": 3,
+   "optimal": true,
+   "proof": "exact search over the ordered task (A*, the estimate never overestimates)",
+   "plan_s": 0.0,
+   "wall_s": 0.078,
+   "message": null
+  }
+ ],
+ "scaling": [
+  {
+   "n": 4,
+   "goal": "sort_by_color",
+   "status": "ok",
+   "planner": "fast-downward",
+   "moves": 4,
+   "lower_bound": 4,
+   "optimal": true,
+   "proof": "the plan moves only objects that must move, each once",
+   "plan_s": 0.102,
+   "wall_s": 0.141,
+   "message": null
+  },
+  {
+   "n": 4,
+   "goal": "stack_by_color",
+   "status": "ok",
+   "planner": "colour-stacks",
+   "moves": 3,
+   "lower_bound": 3,
+   "optimal": true,
+   "proof": "exact search for one stack per colour: A* whose estimate (objects that must still move) is never too high",
+   "plan_s": 0.0,
+   "wall_s": 0.048,
+   "message": null
+  },
+  {
+   "n": 4,
+   "goal": "stack as formula",
+   "status": "ok",
+   "planner": "goal-search",
+   "moves": 3,
+   "lower_bound": null,
+   "optimal": false,
+   "proof": null,
+   "plan_s": 0.0,
+   "wall_s": 0.038,
+   "message": null
+  },
+  {
+   "n": 8,
+   "goal": "sort_by_color",
+   "status": "ok",
+   "planner": "fast-downward",
+   "moves": 8,
+   "lower_bound": 8,
+   "optimal": true,
+   "proof": "the plan moves only objects that must move, each once",
+   "plan_s": 0.113,
+   "wall_s": 0.188,
+   "message": null
+  },
+  {
+   "n": 8,
+   "goal": "stack_by_color",
+   "status": "ok",
+   "planner": "colour-stacks",
+   "moves": 8,
+   "lower_bound": 6,
+   "optimal": true,
+   "proof": "exact search for one stack per colour: A* whose estimate (objects that must still move) is never too high",
+   "plan_s": 0.001,
+   "wall_s": 0.082,
+   "message": null
+  },
+  {
+   "n": 8,
+   "goal": "stack as formula",
+   "status": "ok",
+   "planner": "goal-search",
+   "moves": 8,
+   "lower_bound": null,
+   "optimal": false,
+   "proof": null,
+   "plan_s": 0.838,
+   "wall_s": 0.884,
+   "message": null
+  },
+  {
+   "n": 16,
+   "goal": "sort_by_color",
+   "status": "ok",
+   "planner": "fast-downward",
+   "moves": 16,
+   "lower_bound": 16,
+   "optimal": true,
+   "proof": "the plan moves only objects that must move, each once",
+   "plan_s": 0.184,
+   "wall_s": 0.254,
+   "message": null
+  },
+  {
+   "n": 16,
+   "goal": "stack_by_color",
+   "status": "ok",
+   "planner": "colour-stacks",
+   "moves": 13,
+   "lower_bound": 13,
+   "optimal": true,
+   "proof": "exact search for one stack per colour: A* whose estimate (objects that must still move) is never too high",
+   "plan_s": 0.015,
+   "wall_s": 0.132,
+   "message": null
+  },
+  {
+   "n": 16,
+   "goal": "stack as formula",
+   "status": "ok",
+   "planner": "goal-search",
+   "moves": 14,
+   "lower_bound": null,
+   "optimal": false,
+   "proof": null,
+   "plan_s": 3.253,
+   "wall_s": 3.339,
+   "message": null
+  },
+  {
+   "n": 24,
+   "goal": "sort_by_color",
+   "status": "ok",
+   "planner": "fast-downward",
+   "moves": 24,
+   "lower_bound": 24,
+   "optimal": true,
+   "proof": "the plan moves only objects that must move, each once",
+   "plan_s": 0.265,
+   "wall_s": 0.36,
+   "message": null
+  },
+  {
+   "n": 24,
+   "goal": "stack_by_color",
+   "status": "ok",
+   "planner": "goal-search",
+   "moves": 33,
+   "lower_bound": null,
+   "optimal": false,
+   "proof": null,
+   "plan_s": 3.26,
+   "wall_s": 3.463,
+   "message": null
+  },
+  {
+   "n": 24,
+   "goal": "stack as formula",
+   "status": "ok",
+   "planner": "goal-search",
+   "moves": 33,
+   "lower_bound": null,
+   "optimal": false,
+   "proof": null,
+   "plan_s": 3.27,
+   "wall_s": 3.38,
+   "message": null
+  },
+  {
+   "n": 32,
+   "goal": "sort_by_color",
+   "status": "ok",
+   "planner": "fast-downward",
+   "moves": 32,
+   "lower_bound": 32,
+   "optimal": true,
+   "proof": "the plan moves only objects that must move, each once",
+   "plan_s": 0.4,
+   "wall_s": 0.519,
+   "message": null
+  },
+  {
+   "n": 32,
+   "goal": "stack_by_color",
+   "status": "ok",
+   "planner": "goal-search",
+   "moves": 60,
+   "lower_bound": null,
+   "optimal": false,
+   "proof": null,
+   "plan_s": 3.865,
+   "wall_s": 4.114,
+   "message": null
+  },
+  {
+   "n": 32,
+   "goal": "stack as formula",
+   "status": "ok",
+   "planner": "goal-search",
+   "moves": 60,
+   "lower_bound": null,
+   "optimal": false,
+   "proof": null,
+   "plan_s": 3.874,
+   "wall_s": 4.025,
+   "message": null
+  },
+  {
+   "n": 48,
+   "goal": "sort_by_color",
+   "status": "ok",
+   "planner": "fast-downward",
+   "moves": 48,
+   "lower_bound": 48,
+   "optimal": true,
+   "proof": "the plan moves only objects that must move, each once",
+   "plan_s": 0.862,
+   "wall_s": 1.05,
+   "message": null
+  },
+  {
+   "n": 48,
+   "goal": "stack_by_color",
+   "status": "ok",
+   "planner": "goal-search",
+   "moves": 86,
+   "lower_bound": null,
+   "optimal": false,
+   "proof": null,
+   "plan_s": 6.779,
+   "wall_s": 7.113,
+   "message": null
+  },
+  {
+   "n": 48,
+   "goal": "stack as formula",
+   "status": "ok",
+   "planner": "goal-search",
+   "moves": 86,
+   "lower_bound": null,
+   "optimal": false,
+   "proof": null,
+   "plan_s": 6.833,
+   "wall_s": 7.047,
+   "message": null
+  }
+ ],
+ "greedy_vs_exact": [
+  {
+   "seed": 0,
+   "lower_bound": 12,
+   "greedy_moves": 21,
+   "greedy_s": 1.476,
+   "exact_moves": 14,
+   "exact_s": 0.939,
+   "exact_optimal": true,
+   "check": "ok"
+  },
+  {
+   "seed": 1,
+   "lower_bound": 12,
+   "greedy_moves": 22,
+   "greedy_s": 1.479,
+   "exact_moves": 12,
+   "exact_s": 0.123,
+   "exact_optimal": true,
+   "check": "ok"
+  },
+  {
+   "seed": 2,
+   "lower_bound": 12,
+   "greedy_moves": 16,
+   "greedy_s": 1.024,
+   "exact_moves": 14,
+   "exact_s": 3.317,
+   "exact_optimal": true,
+   "check": "ok"
+  },
+  {
+   "seed": 3,
+   "lower_bound": 12,
+   "greedy_moves": 16,
+   "greedy_s": 0.86,
+   "exact_moves": 14,
+   "exact_s": 0.61,
+   "exact_optimal": true,
+   "check": "ok"
+  },
+  {
+   "seed": 4,
+   "lower_bound": 12,
+   "greedy_moves": 17,
+   "greedy_s": 0.48,
+   "exact_moves": 13,
+   "exact_s": 0.093,
+   "exact_optimal": true,
+   "check": "ok"
+  },
+  {
+   "seed": 5,
+   "lower_bound": 12,
+   "greedy_moves": 17,
+   "greedy_s": 1.321,
+   "exact_moves": 13,
+   "exact_s": 0.431,
+   "exact_optimal": true,
+   "check": "ok"
+  },
+  {
+   "seed": 6,
+   "lower_bound": 12,
+   "greedy_moves": 27,
+   "greedy_s": 1.557,
+   "exact_moves": 13,
+   "exact_s": 0.351,
+   "exact_optimal": true,
+   "check": "ok"
+  },
+  {
+   "seed": 7,
+   "lower_bound": 12,
+   "greedy_moves": 17,
+   "greedy_s": 0.64,
+   "exact_moves": 14,
+   "exact_s": 0.628,
+   "exact_optimal": true,
+   "check": "ok"
+  }
+ ],
+ "wire": {
+  "request_bytes": 1584,
+  "request_gzip_bytes": 361,
+  "answer_full_bytes": 13214,
+  "answer_compact_bytes": 1510,
+  "answer_compact_gzip_bytes": 385,
+  "compact_example": {
+   "request_id": "20261122_194309_efd299",
+   "status": "ok",
+   "plan": [
+    "pick-from-item blue_block_2 green_cube_1",
+    "place-in blue_block_2 blue_zone_s4 blue_zone",
+    "pick-from-item blue_cube_1 green_bar_2",
+    "place-in blue_cube_1 blue_zone_s3 blue_zone",
+    "pick-from-item green_bar_2 yellow_cylinder_1",
+    "place-in green_bar_2 green_zone_s4 green_zone",
+    "pick-from-item green_cube_1 red_bar_1",
+    "place-in green_cube_1 green_zone_s3 green_zone",
+    "pick-from-item green_cube_2 yellow_bar_2",
+    "place-in green_cube_2 green_zone_s2 green_zone",
+    "pick-from-item red_bar_1 yellow_bar_1",
+    "place-in red_bar_1 red_zone_s4 red_zone",
+    "pick-from-item red_block_1 yellow_block_1",
+    "place-in red_block_1 red_zone_s3 red_zone",
+    "pick-from-table yellow_bar_1",
+    "place-in yellow_bar_1 yellow_zone_s4 yellow_zone",
+    "pick-from-item yellow_bar_2 red_cube_1",
+    "place-in yellow_bar_2 yellow_zone_s3 yellow_zone",
+    "pick-from-item red_cube_1 blue_bar_1",
+    "place-in red_cube_1 red_zone_s2 red_zone",
+    "pick-from-table blue_bar_1",
+    "place-in blue_bar_1 blue_zone_s2 blue_zone",
+    "pick-from-item yellow_block_1 blue_block_1",
+    "place-in yellow_block_1 yellow_zone_s2 yellow_zone",
+    "pick-from-item blue_block_1 green_bar_1",
+    "place-in blue_block_1 blue_zone_s1 blue_zone",
+    "pick-from-table green_bar_1",
+    "place-in green_bar_1 green_zone_s1 green_zone",
+    "pick-from-item yellow_cylinder_1 red_block_2",
+    "place-in yellow_cylinder_1 yellow_zone_s1 yellow_zone",
+    "pick-from-table red_block_2",
+    "place-in red_block_2 red_zone_s1 red_zone"
+   ],
+   "quality": {
+    "moves": 16,
+    "optimal": true
+   },
+   "total_s": 0.25
+  },
+  "x_server_ms": 277.5
+ },
+ "replanning": {
+  "first_moves": 16,
+  "kept": {
+   "decision": "kept",
+   "moves_left": 15,
+   "seconds": 0.0,
+   "proof": "the plan moves only objects that must move, each once"
+  },
+  "changed": {
+   "decision": "replanned",
+   "changes": [
+    "green_cube_2: yellow_bar_2 -> table"
+   ],
+   "moves": 16,
+   "seconds": 0.247
+  },
+  "failed": {
+   "first_plan": [
+    "(pick-from-item b1 r1)",
+    "(place-on-table b1)",
+    "(pick-from-table r1)",
+    "(place-in r1 red_zone_s1 red_zone)"
+   ],
+   "reported": "(place-on-table b1)",
+   "new_plan": [
+    "(pick-from-item b1 r1)",
+    "(place-on-item b1 g1)",
+    "(pick-from-table r1)",
+    "(place-in r1 red_zone_s1 red_zone)"
+   ],
+   "rules": [
+    "b1 will not be put on table again (that placement failed)"
+   ],
+   "constraints": {
+    "never_on": [
+     [
+      "b1",
+      "table"
+     ]
+    ]
+   }
+  }
+ },
+ "checking": {
+  "table": {
+   "status": "rejected",
+   "step": 2,
+   "move": 1,
+   "reason": "the table may not be used (no_table / never_on)",
+   "moves_checked": 0
+  },
+  "table_plan": [
+   "pick-from-item blue_cube yellow_bar",
+   "place-on-table blue_cube"
+  ],
+  "note": "red_cube is 40 mm, bars are 25 mm"
+ },
+ "seconds": 56.5
+}

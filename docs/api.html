@@ -115,7 +115,7 @@ html { scroll-behavior: smooth; }
 
 <nav class="anchors" aria-label="Sections">
   <div class="wrap">
-    <a href="#overview">Overview</a><a href="#quickstart">Quick start</a><a href="#scene">Scene JSON</a><a href="#tasks">Tasks</a><a href="#endpoints">Endpoints</a><a href="#responses">Responses</a><a href="#replan">Replanning</a><a href="#images">Images</a><a href="#errors">Errors</a><a href="#network">Network</a><a href="#open">Open points</a>
+    <a href="#overview">Overview</a><a href="#quickstart">Quick start</a><a href="#scene">Scene JSON</a><a href="#tasks">Tasks</a><a href="#endpoints">Endpoints</a><a href="#responses">Responses</a><a href="#replan">Replanning</a><a href="#images">Images</a><a href="#errors">Errors</a><a href="#network">Network</a><a href="#hardware">Hardware</a><a href="#open">Open points</a>
   </div>
 </nav>
 
@@ -281,6 +281,7 @@ else:
   <div class="tablewrap"><table>
     <tr><th>Call</th><th>Use</th></tr>
     <tr><td><code>POST /plan</code></td><td>task + scene JSON or photo → plan (main call)</td></tr>
+    <tr><td><code>POST /plan/model</code></td><td>like /plan, but the model writes the moves; a gate checks each one, the planner finishes</td></tr>
     <tr><td><code>POST /plan/upload</code></td><td>the same as a form with image files</td></tr>
     <tr><td><code>POST /replan</code></td><td>the scene changed → keep the rest of the plan or plan again</td></tr>
     <tr><td><code>POST /solve</code></td><td>scene + goal → plan, no model at all</td></tr>
@@ -311,6 +312,21 @@ else:
  "images_b64": ["/9j/4AAQSkZJRg..."],
  "resolution": "auto",
  "places": [{"id": "red_zone", "color": "red", "capacity": 4}, {"id": "blue_zone", "color": "blue", "capacity": 4}]}</pre></div>
+  </div>
+
+  <div class="ep" id="ep-model">
+    <h3><span class="verb">POST</span>/plan/model</h3>
+    <p>The same request as <code>/plan</code> (scene or photos, instruction or goal, constraints, compact), plus <code>"gate"</code> and <code>"repairs"</code>. Here the <b>model writes the moves</b>, and no model move reaches the robot unchecked:</p>
+    <ul class="plain">
+      <li>The model gets the current arrangement, the goal in words, the rules and, if one was sent, the photo, and answers <code>{"moves": [["blue_cube_1", "table"], ["red_block_1", "red_zone"], ...]}</code>.</li>
+      <li><b>Gate</b>: every move is checked in order with exactly the planner's rules. <code>"legal"</code> (default): allowed and not returning to an arrangement already reached. <code>"optimal"</code>: also on a shortest plan. The first move that fails stops the model's plan.</li>
+      <li><b>Repair</b> (<code>"repairs"</code>, 0 to 3, default 1): the model is told why the move was rejected and writes the remaining moves from the arrangement reached so far.</li>
+      <li>The <b>planner finishes</b> from wherever the model stopped; the whole plan goes through the same three checks as every plan.</li>
+    </ul>
+    <p>Answer: like <code>/plan</code>, plus <code>quality.model_moves</code> and <code>quality.planner_moves</code> (who made which moves), <code>quality.reference_moves</code> and <code>extra_moves</code> (compared with the planner's own plan), and <code>model_plan</code> with every rejected move and its reason and the model's raw answers. Ordered goals stay with the planner (a warning says so); <code>/replan</code> after a <code>/plan/model</code> request uses the planner.</p>
+    <div class="codebox"><pre>{"instruction": "Sort the objects by colour into the zones.",
+ "scene": { ... },
+ "gate": "legal", "repairs": 1, "compact": true}</pre></div>
   </div>
 
   <div class="ep" id="ep-upload">
@@ -470,8 +486,32 @@ netsh interface portproxy show v4tov4</pre></div>
   <p>The firewall rule "WSL planner 8010" stays. Start the server in WSL with <code>./serve.sh start qwen3-vl-8b 4bit</code> (or <code>qwen3-vl-2b bf16</code> for speed).</p>
 </section>
 
+<section id="hardware">
+  <h2><span class="n">11</span>Hardware (HEKATE)</h2>
+  <p>The server runs in WSL 2 on HEKATE, a Windows 11 workstation in the lab. Read from Task Manager and <code>nvidia-smi</code> on 20 November 2026.</p>
+  <div class="tablewrap"><table>
+    <tr><th>Part</th><th>What</th><th>Role</th></tr>
+    <tr><td>GPU 0</td><td>NVIDIA GeForce RTX 5090, 32 GB (32,607 MiB), power limit 600 W, CUDA 13.4 in WSL</td><td>runs the model (VLM)</td></tr>
+    <tr><td>GPU 1</td><td>AMD Radeon Graphics (integrated in the CPU), 2 GB</td><td>display only, not used</td></tr>
+    <tr><td>CPU</td><td>AMD Ryzen 9 9950X, 16 cores / 32 threads, 4.3 GHz base (5.3 GHz seen), L2 16 MB, L3 64 MB</td><td>planner, search and checks (one core per request)</td></tr>
+    <tr><td>Memory</td><td>64 GB DDR5-4800 (61.7 GB usable), 2 of 4 slots used</td><td>loading the model; WSL gets half by default</td></tr>
+    <tr><td>Storage</td><td>C: NVMe SSD, D: SATA hard disk</td><td>keep WSL and the model files on the SSD: loading is much faster</td></tr>
+    <tr><td>Network</td><td>Realtek 2.5 GbE, LAN <code>192.168.73.15</code>; Tailscale <code>100.86.139.108</code></td><td>port 8010 forwarded from Windows into WSL (section 10)</td></tr>
+  </table></div>
+  <h3>Which models fit on the GPU</h3>
+  <div class="tablewrap"><table>
+    <tr><th>Model</th><th>4-bit</th><th>bf16</th></tr>
+    <tr><td><code>qwen3.5-0.8b</code>, <code>lfm2.5-vl-1.6b</code></td><td>about 2 GB</td><td>3 to 5 GB</td></tr>
+    <tr><td><code>qwen3-vl-2b</code>, <code>qwen3.5-2b</code></td><td>about 3 GB</td><td>about 6 GB</td></tr>
+    <tr><td><code>qwen3-vl-4b</code>, <code>qwen3.5-4b</code></td><td>about 5 GB</td><td>about 11 GB</td></tr>
+    <tr><td><code>qwen2.5-vl-7b</code>, <code>cosmos-reason1-7b</code></td><td>about 8 GB</td><td>about 17 GB</td></tr>
+    <tr><td><code>qwen3-vl-8b</code>, <code>qwen3-vl-8b-thinking</code></td><td>8 to 9 GB</td><td>19 to 20 GB</td></tr>
+  </table></div>
+  <p>Rough peaks with one image and the answer: the 4-bit column is from <code>models.yaml</code>, the bf16 column is 2 bytes per parameter plus 1 to 2 GB. On a free RTX 5090 every model fits, also in bf16. The real value is printed at every start: <code>./serve.sh logs</code> shows <code>loaded in X s, weights Y GB VRAM</code>.</p>
+</section>
+
 <section id="open">
-  <h2><span class="n">11</span>Open points</h2>
+  <h2><span class="n">12</span>Open points</h2>
   <ul class="plain">
     <li>Model times in this page are not measured yet on HEKATE; <code>/dashboard</code> shows them once requests run.</li>
     <li>The faster models (Qwen3-VL-2B, Qwen3.5, LFM2.5-VL) are configured but not yet compared: <code>scripts/compare_models.sh</code>.</li>

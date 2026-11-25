@@ -93,6 +93,12 @@ class PlanRequest(BaseModel):
     compact: bool = Field(False, description='answer with only request_id, status, plan ("action arg ..." strings) '
                           'and quality (moves, optimal); the full answer is still logged for /replan')
 
+class ModelPlanRequest(PlanRequest):
+    gate: str = Field('legal', description='"legal": a model move is accepted if the rules allow it and it does not '
+                      'repeat an arrangement; "optimal": also only if it lies on a shortest plan')
+    repairs: int = Field(1, ge=0, le=3, description='after a rejected move, how many times the model may continue '
+                         'from the reached arrangement (it is told why the move was rejected)')
+
 
 class ReplanRequest(BaseModel):
     request_id: str = Field(..., description='request_id of the /plan (or previous /replan) answer')
@@ -157,7 +163,8 @@ def compact_answer(res: dict) -> dict:
         out['plan'] = [' '.join([st['action'], *st['args']]) for st in res['plan']]
     q = res.get('quality') or {}
     if q:
-        out['quality'] = {'moves': q.get('moves'), 'optimal': q.get('optimal')}
+        out['quality'] = {'moves': q.get('moves'), 'optimal': q.get('optimal'),
+                          **{k: q[k] for k in ('model_moves', 'planner_moves') if k in q}}
     if (res.get('timings') or {}).get('total_s') is not None:
         out['total_s'] = res['timings']['total_s']       # server-side pipeline time; header X-Server-Ms = whole request
     return out
@@ -326,6 +333,33 @@ def create_app(vlm, max_visual_tokens: int = 1024, log_dir: Path = LOG_DIR, memo
                           instruction=req.instruction, scene=req.scene, goal=req.goal,
                           planner=req.planner, constraints=req.constraints, places=req.places,
                           ordered=req.ordered)
+        return finish(rid, d, {**body, 'images': [p.name for p in images]}, res, received, req.compact)
+
+    @app.post('/plan/model')
+    def plan_model(req: ModelPlanRequest):
+        """Like /plan, but the MODEL writes the moves: every move passes a gate with the planner's rules,
+        the planner finishes what the model did not, and the whole plan is checked. The answer says which
+        moves came from the model (quality.model_moves) and why a move was rejected (model_plan.rejected)."""
+        if model is None:
+            raise HTTPException(503, 'no model loaded: /plan/model needs the model')
+        if req.gate not in ('legal', 'optimal'):
+            raise HTTPException(422, 'gate must be "legal" or "optimal"')
+        body = req.model_dump(exclude_none=True)
+        b64 = body.pop('images_b64', None) if req.scene is None else None
+        body.pop('images_b64', None)
+        blobs = []
+        for k, b in enumerate(b64 or []):
+            try:
+                blobs.append((f'upload_{k + 1}.jpg', base64.b64decode(b.split(',', 1)[-1], validate=True)))
+            except ValueError:
+                raise HTTPException(400, f'images_b64[{k}] is not valid base64')
+        rid, d = new_request()
+        images = save_images(d, blobs)
+        received = len(json.dumps(req.scene)) if req.scene else sum(len(x) for _, x in blobs)
+        res = plan_images(images, req.resolution, req.crop, attempts=req.attempts,
+                          instruction=req.instruction, scene=req.scene, goal=req.goal,
+                          planner=req.planner, constraints=req.constraints, places=req.places,
+                          ordered=req.ordered, plan_by='model', gate=req.gate, repairs=req.repairs)
         return finish(rid, d, {**body, 'images': [p.name for p in images]}, res, received, req.compact)
 
     @app.post('/plan/upload')

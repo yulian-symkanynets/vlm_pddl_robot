@@ -1,0 +1,103 @@
+{
+ "_photo": "2026-11-25 17.05.34.jpg: four towers on the ArUco board, 16 objects, 4 per colour (front, whole board)",
+ "_note": "Stacks listed bottom to top: left to right in the front view. No zones: the task is stacking only.",
+ "scene_version": 1,
+ "objects": [
+  {
+   "id": "red_bar_1",
+   "color": "red",
+   "shape": "bar",
+   "on": "table"
+  },
+  {
+   "id": "yellow_block_1",
+   "color": "yellow",
+   "shape": "block",
+   "on": "red_bar_1"
+  },
+  {
+   "id": "green_cube_1",
+   "color": "green",
+   "shape": "cube",
+   "on": "yellow_block_1"
+  },
+  {
+   "id": "red_cube_1",
+   "color": "red",
+   "shape": "cube",
+   "on": "green_cube_1"
+  },
+  {
+   "id": "blue_bar_1",
+   "color": "blue",
+   "shape": "bar",
+   "on": "table"
+  },
+  {
+   "id": "blue_block_1",
+   "color": "blue",
+   "shape": "block",
+   "on": "blue_bar_1"
+  },
+  {
+   "id": "blue_block_2",
+   "color": "blue",
+   "shape": "block",
+   "on": "blue_block_1"
+  },
+  {
+   "id": "green_bar_1",
+   "color": "green",
+   "shape": "bar",
+   "on": "blue_block_2"
+  },
+  {
+   "id": "yellow_bar_1",
+   "color": "yellow",
+   "shape": "bar",
+   "on": "table"
+  },
+  {
+   "id": "blue_cube_1",
+   "color": "blue",
+   "shape": "cube",
+   "on": "yellow_bar_1"
+  },
+  {
+   "id": "red_block_1",
+   "color": "red",
+   "shape": "block",
+   "on": "blue_cube_1"
+  },
+  {
+   "id": "red_block_2",
+   "color": "red",
+   "shape": "block",
+   "on": "red_block_1"
+  },
+  {
+   "id": "green_bar_2",
+   "color": "green",
+   "shape": "bar",
+   "on": "table"
+  },
+  {
+   "id": "yellow_block_2",
+   "color": "yellow",
+   "shape": "block",
+   "on": "green_bar_2"
+  },
+  {
+   "id": "green_cube_2",
+   "color": "green",
+   "shape": "cube",
+   "on": "yellow_block_2"
+  },
+  {
+   "id": "yellow_cylinder_1",
+   "color": "yellow",
+   "shape": "cylinder",
+   "on": "green_cube_2"
+  }
+ ]
+}

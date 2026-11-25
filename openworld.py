@@ -924,6 +924,18 @@ def plan_ordered_staged(sc: dict, goal, planner: str, cons: dict) -> dict:
             'message': None if ok else 'plan failed verification: ' + (sim['fail_reason'] or 'goals not met in order')}
 
 
+def goal_formula(grounded) -> dict:
+    """Any grounded goal as one formula (for checks that only need "is the goal reached?")."""
+    import goal_logic
+    if grounded and grounded[0][0] == 'zstack':
+        return goal_logic.stack_in_zones_formula(json.loads(grounded[0][1]))
+    if grounded and grounded[0][0] == 'formula':
+        return json.loads(grounded[0][1])
+    if grounded and all(g[0] == 'col-ok' for g in grounded):
+        return goal_logic.STACK_BY_COLOUR
+    return fixed_to_formula(grounded)
+
+
 def check_plan(scene: dict, goal, plan: list, constraints: dict | None = None, ordered: bool = False) -> dict:
     """Replay a plan made elsewhere under this server's rules: the first step it would reject and why,
     whether the goal is reached, and how it compares with the lower bound. Steps: "action arg ..."
@@ -981,15 +993,7 @@ def check_plan(scene: dict, goal, plan: list, constraints: dict | None = None, o
     if held:
         return {'status': 'rejected', 'step': len(plan or []), 'reason': f'the plan ends with {held} in the hand',
                 'moves_checked': len(moves)}
-    if grounded and grounded[0][0] == 'zstack':
-        formula = goal_logic.stack_in_zones_formula(json.loads(grounded[0][1]))
-    elif grounded and grounded[0][0] == 'formula':
-        formula = json.loads(grounded[0][1])
-    elif grounded and all(g[0] == 'col-ok' for g in grounded):
-        formula = goal_logic.STACK_BY_COLOUR
-    else:
-        formula = fixed_to_formula(grounded)
-    reached = goal_logic.compile_goal(formula, sc).holds(goal_logic.View(sup, sc['items']))
+    reached = goal_logic.compile_goal(goal_formula(grounded), sc).holds(goal_logic.View(sup, sc['items']))
     out = {'status': 'ok' if reached else 'rejected', 'moves': len(moves), 'goal_reached': reached,
            'final': sup, 'reason': None if reached else 'every step is allowed, but the goal is not reached'}
     if ordered and grounded and all(g[0] in FIXED for g in grounded):
@@ -1049,7 +1053,7 @@ def robot_plan(acts) -> list[dict]:
 def run(instruction: str | None = None, scene: dict | None = None, images=None, vlm=None,
         goal=None, planner: str = 'auto', max_visual_tokens: int = 1024, sample: bool = False,
         constraints: dict | None = None, memory=None, places: list | None = None,
-        ordered: bool | None = None) -> dict:
+        ordered: bool | None = None, plan_by: str = 'planner', gate: str = 'legal', repairs: int = 1) -> dict:
     """The server's job. Give `scene` (semantic path) or `images` (+ vlm). `goal` skips the goal call.
     `ordered`: the goal list is a sequence (first A, then B ...); None = as the model read it."""
     t0 = time.perf_counter()
@@ -1168,7 +1172,23 @@ def run(instruction: str | None = None, scene: dict | None = None, images=None, 
         return done('clarify', '; '.join(problems), goal_raw=goal)
     res['constraints'] = dict(cons)             # max_stack_height is handled by the general search
 
-    # 3) PDDL + planner + verification
+    # 3) PDDL + planner + verification  (plan_by "model": the model writes the moves, see model_plan.py)
+    if plan_by == 'model' and ordered:
+        res.setdefault('warnings', []).append('ordered goals are planned by the planner, not by the model')
+    elif plan_by == 'model':
+        import model_plan
+        if vlm is None:
+            return done('error', 'no model loaded: /plan/model needs the model')
+        try:
+            p = model_plan.plan_with_model(sc, grounded, cons, vlm, images, instruction, gate, repairs,
+                                           max_visual_tokens, sample)
+        except Exception as e:                   # noqa: BLE001
+            return done('error', f'model planning: {type(e).__name__}: {e}')
+        res['timings']['model_plan_s'] = p.pop('model_s')
+        res['timings']['plan_s'] = p.pop('plan_s')
+        status, msg = p.pop('status'), p.pop('message')
+        res.update(p)
+        return done(status, msg)
     try:
         p = plan_for(sc, grounded, planner, cons, memory=memory, ordered=bool(ordered))
     except Exception as e:                       # noqa: BLE001  (report, do not crash the server)
@@ -1362,6 +1382,10 @@ class RuleMock:
         t0 = time.perf_counter()
         if context['mode'] == 'ow_perceive':
             text = json.dumps(DEMO_SCENE)
+        elif context['mode'] == 'ow_modelplan':
+            import model_plan
+            p = plan_for(context['scene'], context['goal'], 'auto', context.get('constraints') or {})
+            text = json.dumps({'moves': [list(m) for m in model_plan._moves_of(p.get('plan'))]})
         else:
             text = json.dumps(self._goal(context['instruction'], context['scene']))
         return {'text': text, 'generate_s': round(time.perf_counter() - t0, 4),
